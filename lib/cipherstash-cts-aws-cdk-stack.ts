@@ -11,6 +11,7 @@ import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { DatabaseInstance, DatabaseInstanceEngine, PostgresEngineVersion } from 'aws-cdk-lib/aws-rds';
 import { CfnOutput } from 'aws-cdk-lib/core';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
+import { Asset } from 'aws-cdk-lib/aws-s3-assets';
 
 // Input variables
 const auth0TokenAudiences = ['your-auth0-token-audience1', 'your-auth0-token-audience2'];
@@ -34,17 +35,22 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       encryption: BucketEncryption.S3_MANAGED,
     });
 
-    // Deploy local files to S3 bucket
-    new BucketDeployment(this, 'DeployLambdaZips', {
-      sources: [Source.asset('cts-server/bootstrap.zip')],
-      destinationBucket: lambdaZipsBucket,
-      destinationKeyPrefix: 'cts-server', // optional prefix in the bucket
-    });
+    //// TODO - How the heck do I get the hash of the deployed zip?
+    
+    // const ctsZip = new Asset(this, 'CtsServerZip', {
+    //   path: 'cts-server/bootstrap.zip'
+    // });
 
-    new BucketDeployment(this, 'DeployMigrationsZips', {
-      sources: [Source.asset('cts-migrations/bootstrap.zip')],
+    // const migrationZip = new Asset(this, 'CtsMigrationsZip', {
+    //   path: 'cts-migrations/bootstrap.zip'
+    // });
+      
+    // Deploy local files to S3 bucket
+    const zips = new BucketDeployment(this, 'DeployLambdaZips', {
+      sources: [Source.asset('cts-server'), Source.asset('cts-migrations')],
       destinationBucket: lambdaZipsBucket,
-      destinationKeyPrefix: 'cts-migrations', // optional prefix in the bucket
+      destinationKeyPrefix: 'cts-zips',
+      extract: false,
     });
 
     // KMS Key for JWT Signing
@@ -98,7 +104,7 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       },
       securityGroups: [securityGroup],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      deletionProtection: true,
+      deletionProtection: false, // Set to true to prevent accidental deletion
       databaseName: 'cts',
     });
 
@@ -117,10 +123,11 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       'CTS__LOGGING_ENDPOINTS': '',
     };
 
+    // TODO: This isn't working because the deployed zip is hashed and I can't for the life of be extract the hash
     const ctsServerFunction = new Function(this, 'CtsServerFunction', {
       runtime: Runtime.PROVIDED_AL2,
       handler: 'bootstrap',
-      code: Code.fromBucket(lambdaZipsBucket, 'cts-server/bootstrap'),
+      code: Code.fromBucket(lambdaZipsBucket, 'cts-zips/cts-server/bootstrap.zip'),
       memorySize: 3008,
       timeout: cdk.Duration.seconds(5),
       environment: lambdaEnvironment,
@@ -130,10 +137,11 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
     });
 
+    // TODO: This isn't working because the deployed zip is hashed and I can't for the life of be extract the hash
     const ctsMigrationsFunction = new Function(this, 'CtsMigrationsFunction', {
       runtime: Runtime.PROVIDED_AL2,
       handler: 'bootstrap',
-      code: Code.fromBucket(lambdaZipsBucket, 'cts-migrations/bootstrap'),
+      code: Code.fromBucket(lambdaZipsBucket, 'cts-zips/cts-server/bootstrap.zip'),
       memorySize: 128,
       timeout: cdk.Duration.seconds(30),
       environment: lambdaEnvironment,
