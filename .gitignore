@@ -9,3 +9,5 @@ cdk.out
 
 bootstrap.zip
 .DS_Store
+
+.envrc
