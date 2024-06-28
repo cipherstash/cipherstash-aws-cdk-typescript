@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { App, Fn, Stack, type StackProps } from 'aws-cdk-lib';
-import { Role, ServicePrincipal, ManagedPolicy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { AccountRootPrincipal, Role, ServicePrincipal, ManagedPolicy, PolicyStatement, PolicyDocument, Effect, ArnPrincipal } from 'aws-cdk-lib/aws-iam';
 import { Bucket, BlockPublicAccess, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { Vpc, SubnetType, SecurityGroup, InstanceType, InstanceClass, InstanceSize } from 'aws-cdk-lib/aws-ec2';
 import { Key, KeySpec, KeyUsage } from 'aws-cdk-lib/aws-kms';
@@ -12,14 +12,23 @@ import { DatabaseInstance, DatabaseInstanceEngine, PostgresEngineVersion } from 
 import { CfnOutput } from 'aws-cdk-lib/core';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Asset } from 'aws-cdk-lib/aws-s3-assets';
+import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
 // Input variables
 const auth0TokenAudiences = ['your-auth0-token-audience1', 'your-auth0-token-audience2'];
 const auth0TokenIssuer = 'your-auth0-token-issuer';
 
+interface CipherstashCtsAwsCdkStackProps extends StackProps {
+  kmsKeyManagerArns?: string[],
+}
+
 export class CipherstashCtsAwsCdkStack extends Stack {
-  constructor(scope: App, id: string, props?: StackProps) {
+  constructor(scope: App, id: string, props?: CipherstashCtsAwsCdkStackProps) {
     super(scope, id, props);
+
+    const kmsKeyManagers = props?.kmsKeyManagerArns ?
+      [new AccountRootPrincipal(), ...props.kmsKeyManagerArns.map(arn => new ArnPrincipal(arn))] :
+      [new AccountRootPrincipal()]
 
     // IAM Role for Lambda
     const lambdaExecRole = new Role(this, 'LambdaExecutionRole', {
@@ -35,16 +44,6 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       encryption: BucketEncryption.S3_MANAGED,
     });
 
-    //// TODO - How the heck do I get the hash of the deployed zip?
-
-    // const ctsZip = new Asset(this, 'CtsServerZip', {
-    //   path: 'cts-server/bootstrap.zip'
-    // });
-
-    // const migrationZip = new Asset(this, 'CtsMigrationsZip', {
-    //   path: 'cts-migrations/bootstrap.zip'
-    // });
-
     // Deploy local files to S3 bucket
     const serverZip = new BucketDeployment(this, 'DeployServerLambdaZips', {
       sources: [Source.asset('cts-server/bootstrap.zip')],
@@ -52,26 +51,58 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       destinationKeyPrefix: 'cts-zips/cts-server',
       extract: false,
     });
-    // const zips = new BucketDeployment(this, 'DeployLambdaZips', {
-    //   sources: [Source.asset('cts-server'), Source.asset('cts-migrations')],
-    //   destinationBucket: lambdaZipsBucket,
-    //   destinationKeyPrefix: 'cts-zips',
-    //   extract: false,
-    // });
+
+    const migrationsZip = new BucketDeployment(this, 'DeployMigrationsLambdaZips', {
+      sources: [Source.asset('cts-migrations/bootstrap.zip')],
+      destinationBucket: lambdaZipsBucket,
+      destinationKeyPrefix: 'cts-zips/cts-migrations',
+      extract: false,
+    });
 
     // KMS Key for JWT Signing
-    // const jwtSigningKey = new Key(this, 'JwtSigningKey', {
-    //   description: 'RSA key to sign JWTs issued by CTS',
-    //   enableKeyRotation: false,
-    //   keySpec: KeySpec.RSA_4096,
-    //   keyUsage: KeyUsage.SIGN_VERIFY,
-    // });
-
-    // jwtSigningKey.addToResourcePolicy(new PolicyStatement({
-    //   actions: ['kms:*'],
-    //   resources: ['*'],
-    //   principals: [lambdaExecRole]
-    // }));
+    const jwtSigningKey = new Key(this, 'JwtSigningKey', {
+      description: 'RSA key to sign JWTs issued by CTS',
+      enableKeyRotation: false,
+      keySpec: KeySpec.RSA_4096,
+      keyUsage: KeyUsage.SIGN_VERIFY,
+      alias: "cts-jwt-signing-key",
+      policy: new PolicyDocument({
+        statements: [
+          new PolicyStatement({
+            sid: "Key Managers",
+            effect: Effect.ALLOW,
+            principals: kmsKeyManagers,
+            actions: [
+              "kms:Create*",
+              "kms:Describe*",
+              "kms:Enable*",
+              "kms:List*",
+              "kms:Put*",
+              "kms:Update*",
+              "kms:Revoke*",
+              "kms:Disable*",
+              "kms:Get*",
+              "kms:Delete*",
+              "kms:TagResource",
+              "kms:UntagResource",
+              "kms:ScheduleKeyDeletion",
+              "kms:CancelKeyDeletion",
+            ],
+            resources: ["*"],
+          }),
+          new PolicyStatement({
+            sid: "Allow CTS to work with the key",
+            effect: Effect.ALLOW,
+            principals: [lambdaExecRole],
+            actions: [
+              "kms:GetPublicKey",
+              "kms:Sign"
+            ],
+            resources: ["*"],
+          })
+        ]
+      })
+    });
 
     // VPC and Subnets
     // const vpc = new Vpc(this, 'Vpc', {
@@ -95,6 +126,27 @@ export class CipherstashCtsAwsCdkStack extends Stack {
     //   allowAllOutbound: true,
     // });
 
+    // const auroraClusterSecret = new secretsmanager.Secret(
+    //   this,
+    //   'AuroraClusterCredentials',
+    //   {
+    //     secretName: props.dbName + 'AuroraClusterCredentials',
+    //     description: props.dbName + 'AuroraClusterCrendetials',
+    //     generateSecretString: {
+    //       excludeCharacters: "\"@/\\ '",
+    //       generateStringKey: 'password',
+    //       passwordLength: 30,
+    //       secretStringTemplate: JSON.stringify({username: props.auroraClusterUsername}),
+    //     },
+    //   },
+    // );
+
+    // aurora credentials
+    // const auroraClusterCrendentials= rds.Credentials.fromSecret(
+    //   auroraClusterSecret,
+    //   props.auroraClusterUsername,
+    // );
+
     // RDS Instance
     // const dbInstance = new DatabaseInstance(this, 'Database', {
     //   engine: DatabaseInstanceEngine.postgres({
@@ -115,53 +167,56 @@ export class CipherstashCtsAwsCdkStack extends Stack {
     // });
 
     // Lambda functions
-    // const lambdaEnvironment = {
-    //   'CTS__AUTH0__TOKEN_AUDIENCES': auth0TokenAudiences.join(','),
-    //   'CTS__AUTH0__TOKEN_ISSUER': auth0TokenIssuer,
-    //   // 'CTS__DATABASE__CREDS_SECRET_ARN': dbInstance.secret?.secretArn || '',
-    //   // 'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
-    //   'CTS__DATABASE__NAME': 'cts',
-    //   // 'CTS__DATABASE__PORT': dbInstance.dbInstanceEndpointPort,
-    //   'CTS__DATABASE__SSL_MODE': 'verify-full',
-    //   // 'CTS__JWT_SIGNING_KEY_ID': jwtSigningKey.keyId,
-    //   'CTS__TRACING_ENABLED': 'false',
-    //   'CTS__META_ENDPOINTS_ENABLED': 'true',
-    //   'CTS__LOGGING_ENDPOINTS': '',
-    // };
+    const lambdaEnvironment = {
+      'CTS__AUTH0__TOKEN_AUDIENCES': auth0TokenAudiences.join(','),
+      'CTS__AUTH0__TOKEN_ISSUER': auth0TokenIssuer,
+      // 'CTS__DATABASE__CREDS_SECRET_ARN': dbInstance.secret?.secretArn || '',
+      // 'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
+      'CTS__DATABASE__NAME': 'cts',
+      // 'CTS__DATABASE__PORT': dbInstance.dbInstanceEndpointPort,
+      'CTS__DATABASE__SSL_MODE': 'verify-full',
+      'CTS__JWT_SIGNING_KEY_ID': jwtSigningKey.keyId,
+      'CTS__TRACING_ENABLED': 'false',
+      'CTS__META_ENDPOINTS_ENABLED': 'true',
+      'CTS__LOGGING_ENDPOINTS': '',
+    };
 
-    // TODO: This isn't working because the deployed zip is hashed and I can't for the life of be extract the hash
     const ctsServerFunction = new Function(this, 'CtsServerFunction', {
       runtime: Runtime.PROVIDED_AL2023,
       handler: 'bootstrap',
       code: Code.fromBucket(lambdaZipsBucket,  `cts-zips/cts-server/${Fn.select(0, serverZip.objectKeys)}`),
       memorySize: 3008,
       timeout: cdk.Duration.seconds(5),
-      // environment: lambdaEnvironment,
+      environment: lambdaEnvironment,
       role: lambdaExecRole,
       // vpc,
       // securityGroups: [securityGroup],
       // vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
     });
 
-    // TODO: This isn't working because the deployed zip is hashed and I can't for the life of be extract the hash
-    // const ctsMigrationsFunction = new Function(this, 'CtsMigrationsFunction', {
-    //   runtime: Runtime.PROVIDED_AL2,
-    //   handler: 'bootstrap',
-    //   code: Code.fromBucket(lambdaZipsBucket, 'cts-zips/cts-migrations/bootstrap.zip'),
-    //   memorySize: 128,
-    //   timeout: cdk.Duration.seconds(30),
-    //   environment: lambdaEnvironment,
-    //   role: lambdaExecRole,
-    //   // vpc,
-    //   // securityGroups: [securityGroup],
-    //   vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
-    // });
+    const ctsMigrationsFunction = new Function(this, 'CtsMigrationsFunction', {
+      runtime: Runtime.PROVIDED_AL2023,
+      handler: 'bootstrap',
+      code: Code.fromBucket(lambdaZipsBucket,  `cts-zips/cts-migrations/${Fn.select(0, migrationsZip.objectKeys)}`),
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(30),
+      environment: lambdaEnvironment,
+      role: lambdaExecRole,
+      // vpc,
+      // securityGroups: [securityGroup],
+      // vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+    });
 
     // CloudWatch Log Group
-    // const logGroup = new LogGroup(this, 'LogGroup', {
-    //   logGroupName: `/aws/lambda/${ctsServerFunction.functionName}`,
-    //   retention: RetentionDays.ONE_DAY,
-    // });
+    const serverFunctionLogGroup = new LogGroup(this, 'ServerFunctionLogGroup', {
+      logGroupName: `/aws/lambda/${ctsServerFunction.functionName}`,
+      retention: RetentionDays.ONE_DAY,
+    });
+
+    const migrationsFunctionLogGroup = new LogGroup(this, 'MigrationsFunctionLogGroup', {
+      logGroupName: `/aws/lambda/${ctsMigrationsFunction.functionName}`,
+      retention: RetentionDays.ONE_DAY,
+    });
 
     // API Gateway
     // const httpApi = new HttpApi(this, 'HttpApi', {
@@ -187,19 +242,17 @@ export class CipherstashCtsAwsCdkStack extends Stack {
     //   description: 'The URL of the CTS API',
     //   value: httpApi.url ?? 'N/A',
     // });
-
-    new CfnOutput(this, 'zipKeys0', {
-      description: 'zip keys 0',
-      value: Fn.select(0, serverZip.objectKeys),
-    });
-
-    // new CfnOutput(this, 'zipKeys1', {
-    //   description: 'zip keys 1',
-    //   value: Fn.select(1, serverZip.objectKeys),
-    // });
   }
 }
 
-const app = new App();
-new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack');
-app.synth();
+(async () => {
+  const client = new STSClient();
+  const command = new GetCallerIdentityCommand({});
+  const identityResponse = await client.send(command);
+
+  const kmsKeyManagerArns = identityResponse.Arn ? [identityResponse.Arn] : []
+
+  const app = new App();
+  new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', { kmsKeyManagerArns });
+  app.synth();
+})();
