@@ -15,11 +15,11 @@ The project uses zip files to package the Lambda functions. The zip files are av
 Replace `TOKEN` with the CloudSmith token provided to you by your CipherStash technical contact.
 
 ```
-curl -1sLf -o cts-migrations/bootstrap.zip 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts-migrations/versions/latest/bootstrap.zip'
+curl -1sLf -o cts-migrations/bootstrap.zip 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts-migrations/versions/latest/cts-migrations.zip'
 ```
 
 ```
-curl -1sLf -o cts-server/bootstrap.zip 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts/versions/latest/bootstrap.zip' -v
+curl -1sLf -o cts-server/bootstrap.zip 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts/versions/latest/cts.zip' -v
 ```
 
 ## Getting Started
