@@ -2,21 +2,25 @@ import * as cdk from 'aws-cdk-lib';
 import { App, Fn, Stack, type StackProps } from 'aws-cdk-lib';
 import { AccountRootPrincipal, Role, ServicePrincipal, ManagedPolicy, PolicyStatement, PolicyDocument, Effect, ArnPrincipal } from 'aws-cdk-lib/aws-iam';
 import { Bucket, BlockPublicAccess, BucketEncryption } from 'aws-cdk-lib/aws-s3';
-import { Vpc, SubnetType, SecurityGroup, InstanceType, InstanceClass, InstanceSize } from 'aws-cdk-lib/aws-ec2';
+import { Vpc, SubnetType, SecurityGroup, InstanceType, InstanceClass, InstanceSize, Port } from 'aws-cdk-lib/aws-ec2';
 import { Key, KeySpec, KeyUsage } from 'aws-cdk-lib/aws-kms';
 // biome-ignore lint/suspicious/noShadowRestrictedNames: This is a false positive
-import { Function, Runtime, Code } from 'aws-cdk-lib/aws-lambda';
+import { Function, Runtime, Code, FunctionUrlAuthType, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { HttpApi, HttpStage, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
-import { DatabaseInstance, DatabaseInstanceEngine, PostgresEngineVersion } from 'aws-cdk-lib/aws-rds';
+import { Credentials, DatabaseInstance, DatabaseInstanceEngine, PostgresEngineVersion } from 'aws-cdk-lib/aws-rds';
 import { CfnOutput } from 'aws-cdk-lib/core';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Asset } from 'aws-cdk-lib/aws-s3-assets';
 import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 
 // Input variables
-const auth0TokenAudiences = ['your-auth0-token-audience1', 'your-auth0-token-audience2'];
-const auth0TokenIssuer = 'your-auth0-token-issuer';
+
+// The function URL (but should be API GW URL)
+const auth0TokenAudiences = ['https://wfkgtiwijo2qo656okx23kjfiq0hkwxf.lambda-url.ap-southeast-2.on.aws'];
+
+const auth0TokenIssuer = 'https://cipherstash-dev.au.auth0.com/';
 
 interface CipherstashCtsAwsCdkStackProps extends StackProps {
   kmsKeyManagerArns?: string[],
@@ -105,75 +109,83 @@ export class CipherstashCtsAwsCdkStack extends Stack {
     });
 
     // VPC and Subnets
-    // const vpc = new Vpc(this, 'Vpc', {
-    //   maxAzs: 2,
-    //   subnetConfiguration: [
-    //     {
-    //       cidrMask: 24,
-    //       name: 'public',
-    //       subnetType: SubnetType.PUBLIC,
-    //     },
-    //     {
-    //       cidrMask: 24,
-    //       name: 'private',
-    //       subnetType: SubnetType.PRIVATE_WITH_EGRESS,
-    //     },
-    //   ],
-    // });
+    const vpc = new Vpc(this, 'Vpc', {
+      maxAzs: 2,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'public',
+          subnetType: SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'private',
+          subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
+    });
 
-    // const securityGroup = new SecurityGroup(this, 'SecurityGroup', {
-    //   vpc,
-    //   allowAllOutbound: true,
-    // });
+    const lambdaSecurityGroup = new SecurityGroup(this, 'LambdaSecurityGroup', {
+      vpc,
+      allowAllOutbound: true,
+    });
 
-    // const auroraClusterSecret = new secretsmanager.Secret(
-    //   this,
-    //   'AuroraClusterCredentials',
-    //   {
-    //     secretName: props.dbName + 'AuroraClusterCredentials',
-    //     description: props.dbName + 'AuroraClusterCrendetials',
-    //     generateSecretString: {
-    //       excludeCharacters: "\"@/\\ '",
-    //       generateStringKey: 'password',
-    //       passwordLength: 30,
-    //       secretStringTemplate: JSON.stringify({username: props.auroraClusterUsername}),
-    //     },
-    //   },
-    // );
+    const rdsSecurityGroup = new SecurityGroup(this, 'RdsSecurityGroup', {
+      vpc,
+      allowAllOutbound: true,
+    });
 
-    // aurora credentials
-    // const auroraClusterCrendentials= rds.Credentials.fromSecret(
-    //   auroraClusterSecret,
-    //   props.auroraClusterUsername,
-    // );
+    rdsSecurityGroup.addIngressRule(lambdaSecurityGroup, Port.POSTGRES, "Allow inbound Postgres traffic from Lambda.");
+
+    const postgresUsername = "postgres"
+
+    // TODO: CMK
+    const postgresSecret = new Secret(this, 'MysqlCredentials', {
+      secretName: 'CtsPostgresCredentials',
+      description: "CTS Postgres Credentials",
+      generateSecretString: {
+        excludeCharacters: "\"@/\\ '",
+        generateStringKey: 'password',
+        passwordLength: 30,
+        secretStringTemplate: JSON.stringify({username: postgresUsername}),
+      },
+    });
+
+    postgresSecret.grantRead(lambdaExecRole);
+
+    const postgresCredentials = Credentials.fromSecret(
+      postgresSecret,
+      postgresUsername,
+    );
+
+    // TODO: CMK
 
     // RDS Instance
-    // const dbInstance = new DatabaseInstance(this, 'Database', {
-    //   engine: DatabaseInstanceEngine.postgres({
-    //     version: PostgresEngineVersion.VER_16_3,
-    //   }),
-    //   instanceType: InstanceType.of(InstanceClass.T3, InstanceSize.MICRO),
-    //   vpc,
-    //   vpcSubnets: {
-    //     subnetType: SubnetType.PRIVATE_WITH_EGRESS,
-    //   },
-    //   credentials: {
-    //     username: 'postgres',
-    //   },
-    //   securityGroups: [securityGroup],
-    //   removalPolicy: cdk.RemovalPolicy.DESTROY,
-    //   deletionProtection: false, // Set to true to prevent accidental deletion
-    //   databaseName: 'cts',
-    // });
+    const dbInstance = new DatabaseInstance(this, 'Database', {
+      allocatedStorage: 20,
+      engine: DatabaseInstanceEngine.postgres({
+        version: PostgresEngineVersion.VER_16_3,
+      }),
+      instanceType: InstanceType.of(InstanceClass.T3, InstanceSize.MICRO),
+      vpc,
+      vpcSubnets: {
+        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      credentials: postgresCredentials,
+      securityGroups: [rdsSecurityGroup],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      deletionProtection: false, // Set to true to prevent accidental deletion
+      databaseName: 'cts',
+    });
 
     // Lambda functions
     const lambdaEnvironment = {
       'CTS__AUTH0__TOKEN_AUDIENCES': auth0TokenAudiences.join(','),
       'CTS__AUTH0__TOKEN_ISSUER': auth0TokenIssuer,
-      // 'CTS__DATABASE__CREDS_SECRET_ARN': dbInstance.secret?.secretArn || '',
-      // 'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
+      'CTS__DATABASE__CREDS_SECRET_ARN': postgresSecret.secretArn,
+      'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
       'CTS__DATABASE__NAME': 'cts',
-      // 'CTS__DATABASE__PORT': dbInstance.dbInstanceEndpointPort,
+      'CTS__DATABASE__PORT': dbInstance.dbInstanceEndpointPort,
       'CTS__DATABASE__SSL_MODE': 'verify-full',
       'CTS__JWT_SIGNING_KEY_ID': jwtSigningKey.keyId,
       'CTS__TRACING_ENABLED': 'false',
@@ -183,28 +195,34 @@ export class CipherstashCtsAwsCdkStack extends Stack {
 
     const ctsServerFunction = new Function(this, 'CtsServerFunction', {
       runtime: Runtime.PROVIDED_AL2023,
+      architecture: Architecture.ARM_64,
       handler: 'bootstrap',
       code: Code.fromBucket(lambdaZipsBucket,  `cts-zips/cts-server/${Fn.select(0, serverZip.objectKeys)}`),
       memorySize: 3008,
       timeout: cdk.Duration.seconds(5),
       environment: lambdaEnvironment,
       role: lambdaExecRole,
-      // vpc,
-      // securityGroups: [securityGroup],
-      // vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+      vpc,
+      securityGroups: [lambdaSecurityGroup],
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
+    const ctsServerFunctionUrl = ctsServerFunction.addFunctionUrl({
+      authType: FunctionUrlAuthType.NONE,
     });
 
     const ctsMigrationsFunction = new Function(this, 'CtsMigrationsFunction', {
       runtime: Runtime.PROVIDED_AL2023,
+      architecture: Architecture.ARM_64,
       handler: 'bootstrap',
       code: Code.fromBucket(lambdaZipsBucket,  `cts-zips/cts-migrations/${Fn.select(0, migrationsZip.objectKeys)}`),
       memorySize: 128,
       timeout: cdk.Duration.seconds(30),
       environment: lambdaEnvironment,
       role: lambdaExecRole,
-      // vpc,
-      // securityGroups: [securityGroup],
-      // vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+      vpc,
+      securityGroups: [lambdaSecurityGroup],
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
     });
 
     // CloudWatch Log Group
@@ -238,10 +256,15 @@ export class CipherstashCtsAwsCdkStack extends Stack {
     // });
 
     // Output for CTS API URL
-    // new CfnOutput(this, 'CtsApiUrl', {
-    //   description: 'The URL of the CTS API',
-    //   value: httpApi.url ?? 'N/A',
-    // });
+    new CfnOutput(this, 'CtsApiUrl', {
+      description: 'The URL of the CTS API',
+      value: ctsServerFunctionUrl.url,
+    });
+
+    new CfnOutput(this, 'CtsMigrationFunctionName', {
+      description: 'The name of the Lambda function for running DB migrations',
+      value: ctsMigrationsFunction.functionName,
+    });
   }
 }
 
