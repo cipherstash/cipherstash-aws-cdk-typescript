@@ -5,22 +5,15 @@ import { Bucket, BlockPublicAccess, BucketEncryption } from 'aws-cdk-lib/aws-s3'
 import { Vpc, SubnetType, SecurityGroup, InstanceType, InstanceClass, InstanceSize, Port } from 'aws-cdk-lib/aws-ec2';
 import { Key, KeySpec, KeyUsage } from 'aws-cdk-lib/aws-kms';
 // biome-ignore lint/suspicious/noShadowRestrictedNames: This is a false positive
-import { Function, Runtime, Code, FunctionUrlAuthType, Architecture } from 'aws-cdk-lib/aws-lambda';
-import { HttpApi, HttpStage, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { Function, Runtime, Code, Architecture } from 'aws-cdk-lib/aws-lambda';
+import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Credentials, DatabaseInstance, DatabaseInstanceEngine, PostgresEngineVersion } from 'aws-cdk-lib/aws-rds';
 import { CfnOutput } from 'aws-cdk-lib/core';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
-import { Asset } from 'aws-cdk-lib/aws-s3-assets';
 import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
-
-// Input variables
-
-// The function URL (but should be API GW URL)
-const auth0TokenAudiences = ['https://wfkgtiwijo2qo656okx23kjfiq0hkwxf.lambda-url.ap-southeast-2.on.aws'];
-
-const auth0TokenIssuer = 'https://cipherstash-dev.au.auth0.com/';
+import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 
 interface CipherstashCtsAwsCdkStackProps extends StackProps {
   kmsKeyManagerArns?: string[],
@@ -33,6 +26,14 @@ export class CipherstashCtsAwsCdkStack extends Stack {
     const kmsKeyManagers = props?.kmsKeyManagerArns ?
       [new AccountRootPrincipal(), ...props.kmsKeyManagerArns.map(arn => new ArnPrincipal(arn))] :
       [new AccountRootPrincipal()]
+
+    // For demo purposes, this should be the API Gateway execute endpoint URL (without a trailing Slash).
+    // In production, this would be the same custom domain name used by API GW.
+    //
+    // TODO: use custom domain to remove circular dependency between Lambda and API GW?
+    const auth0TokenAudience = getEnvVar("AUTH0_TOKEN_AUDIENCE");
+
+    const auth0TokenIssuer = getEnvVar("AUTH0_TOKEN_ISSUER");
 
     // IAM Role for Lambda
     const lambdaExecRole = new Role(this, 'LambdaExecutionRole', {
@@ -180,7 +181,7 @@ export class CipherstashCtsAwsCdkStack extends Stack {
 
     // Lambda functions
     const lambdaEnvironment = {
-      'CTS__AUTH0__TOKEN_AUDIENCES': auth0TokenAudiences.join(','),
+      'CTS__AUTH0__TOKEN_AUDIENCES': auth0TokenAudience,
       'CTS__AUTH0__TOKEN_ISSUER': auth0TokenIssuer,
       'CTS__DATABASE__CREDS_SECRET_ARN': postgresSecret.secretArn,
       'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
@@ -207,10 +208,6 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
     });
 
-    const ctsServerFunctionUrl = ctsServerFunction.addFunctionUrl({
-      authType: FunctionUrlAuthType.NONE,
-    });
-
     const ctsMigrationsFunction = new Function(this, 'CtsMigrationsFunction', {
       runtime: Runtime.PROVIDED_AL2023,
       architecture: Architecture.ARM_64,
@@ -225,40 +222,30 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
     });
 
-    // CloudWatch Log Group
-    const serverFunctionLogGroup = new LogGroup(this, 'ServerFunctionLogGroup', {
+    // CloudWatch Log Groups
+    new LogGroup(this, 'ServerFunctionLogGroup', {
       logGroupName: `/aws/lambda/${ctsServerFunction.functionName}`,
       retention: RetentionDays.ONE_DAY,
     });
 
-    const migrationsFunctionLogGroup = new LogGroup(this, 'MigrationsFunctionLogGroup', {
+    new LogGroup(this, 'MigrationsFunctionLogGroup', {
       logGroupName: `/aws/lambda/${ctsMigrationsFunction.functionName}`,
       retention: RetentionDays.ONE_DAY,
     });
 
     // API Gateway
-    // const httpApi = new HttpApi(this, 'HttpApi', {
-    //   apiName: 'cts',
-    //   createDefaultStage: true,
-    // });
+    const httpApi = new HttpApi(this, 'CtsHttpApi');
 
-    // httpApi.addRoutes({
-    //   path: '/{proxy+}',
-    //   methods: [HttpMethod.ANY],
-    //   integration: new cdk.aws_apigatewayv2_integrations.HttpLambdaIntegration('LambdaIntegration', ctsServerFunction),
-    // });
-
-    // new cdk.aws_lambda.CfnPermission(this, 'ApiGatewayInvokePermission', {
-    //   action: 'lambda:InvokeFunction',
-    //   principal: 'apigateway.amazonaws.com',
-    //   functionName: ctsServerFunction.functionName,
-    //   sourceArn: `${httpApi.apiEndpoint}/*/*`,
-    // });
+    httpApi.addRoutes({
+      path: '/{proxy+}',
+      methods: [HttpMethod.ANY],
+      integration: new HttpLambdaIntegration('CtsLambdaIntegration', ctsServerFunction),
+    });
 
     // Output for CTS API URL
     new CfnOutput(this, 'CtsApiUrl', {
       description: 'The URL of the CTS API',
-      value: ctsServerFunctionUrl.url,
+      value: httpApi.url ?? "N/A",
     });
 
     new CfnOutput(this, 'CtsMigrationFunctionName', {
@@ -266,6 +253,16 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       value: ctsMigrationsFunction.functionName,
     });
   }
+}
+
+function getEnvVar(name: string): string {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`Required environment variable ${name} not set.`);
+  }
+
+  return value;
 }
 
 (async () => {
@@ -276,6 +273,10 @@ export class CipherstashCtsAwsCdkStack extends Stack {
   const kmsKeyManagerArns = identityResponse.Arn ? [identityResponse.Arn] : []
 
   const app = new App();
-  new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', { kmsKeyManagerArns });
+
+  new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', {
+    kmsKeyManagerArns,
+  });
+
   app.synth();
 })();
