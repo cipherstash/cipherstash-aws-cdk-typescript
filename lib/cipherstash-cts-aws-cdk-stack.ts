@@ -16,6 +16,8 @@ import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations
 
 interface CipherstashCtsAwsCdkStackProps extends StackProps {
   kmsKeyManagerArns: string[],
+  tokenAudience: string,
+  tokenIssuer: string,
 }
 
 export class CipherstashCtsAwsCdkStack extends Stack {
@@ -26,15 +28,6 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       new AccountRootPrincipal(),
       ...props.kmsKeyManagerArns.map(arn => new ArnPrincipal(arn))
     ];
-
-    // For demo purposes, this should be the API Gateway execute endpoint URL (without a trailing Slash).
-    // In production, this would be the same custom domain name used by API GW.
-    //
-    // TODO: use custom domain to remove circular dependency between Lambda and API GW?
-    // TODO: move env vars to top level?
-    const auth0TokenAudience = getEnvVar("AUTH0_TOKEN_AUDIENCE");
-
-    const auth0TokenIssuer = getEnvVar("AUTH0_TOKEN_ISSUER");
 
     // IAM Role for Lambda
     const lambdaExecRole = new Role(this, 'LambdaExecutionRole', {
@@ -142,8 +135,8 @@ export class CipherstashCtsAwsCdkStack extends Stack {
     const postgresUsername = "postgres"
 
     // TODO: CMK
-    const postgresSecret = new Secret(this, 'MysqlCredentials', {
-      secretName: 'CtsPostgresCredentials',
+    const postgresSecret = new Secret(this, 'PostgresCredentials', {
+      secretName: 'CtsPgCredentials',
       description: "CTS Postgres Credentials",
       generateSecretString: {
         excludeCharacters: "\"@/\\ '",
@@ -182,8 +175,8 @@ export class CipherstashCtsAwsCdkStack extends Stack {
 
     // Lambda functions
     const lambdaEnvironment = {
-      'CTS__AUTH0__TOKEN_AUDIENCES': auth0TokenAudience,
-      'CTS__AUTH0__TOKEN_ISSUER': auth0TokenIssuer,
+      'CTS__AUTH0__TOKEN_AUDIENCES': props.tokenAudience,
+      'CTS__AUTH0__TOKEN_ISSUER': props.tokenIssuer,
       'CTS__DATABASE__CREDS_SECRET_ARN': postgresSecret.secretArn,
       'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
       'CTS__DATABASE__NAME': 'cts',
@@ -257,11 +250,19 @@ export class CipherstashCtsAwsCdkStack extends Stack {
 }
 
 interface CipherstashZkmsAwsCdkStackProps extends StackProps {
+  kmsKeyManagerArns: string[],
+  tokenAudience: string,
+  tokenIssuer: string,
 }
 
 export class CipherstashZkmsAwsCdkStack extends Stack {
   constructor(scope: App, id: string, props: CipherstashZkmsAwsCdkStackProps) {
     super(scope, id, props);
+
+    const kmsKeyManagers = [
+      new AccountRootPrincipal(),
+      ...props.kmsKeyManagerArns.map(arn => new ArnPrincipal(arn))
+    ];
 
     // IAM Role for Lambda
     const lambdaExecRole = new Role(this, 'LambdaExecutionRole', {
@@ -291,10 +292,194 @@ export class CipherstashZkmsAwsCdkStack extends Stack {
       destinationKeyPrefix: 'zkms-zips/zkms-migrations',
       extract: false,
     });
+
+    const rootKey = new Key(this, 'RootKey', {
+      description: 'ZKMS root key',
+      alias: "zkms-root-key",
+      policy: new PolicyDocument({
+        statements: [
+          new PolicyStatement({
+            sid: "Key Managers",
+            effect: Effect.ALLOW,
+            principals: kmsKeyManagers,
+            actions: [
+              "kms:Create*",
+              "kms:Describe*",
+              "kms:Enable*",
+              "kms:List*",
+              "kms:Put*",
+              "kms:Update*",
+              "kms:Revoke*",
+              "kms:Disable*",
+              "kms:Get*",
+              "kms:Delete*",
+              "kms:TagResource",
+              "kms:UntagResource",
+              "kms:ScheduleKeyDeletion",
+              "kms:CancelKeyDeletion",
+              "kms:RotateKeyOnDemand",
+            ],
+            resources: ["*"],
+          }),
+          new PolicyStatement({
+            sid: "Allow ZeroKMS to work with the key",
+            effect: Effect.ALLOW,
+            principals: [lambdaExecRole],
+            actions: [
+              "kms:GenerateDataKey",
+              "kms:Decrypt",
+              "kms:Encrypt",
+            ],
+            resources: ["*"],
+          })
+        ]
+      })
+    });
+
+    // VPC and Subnets
+    const vpc = new Vpc(this, 'Vpc', {
+      maxAzs: 2,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'public',
+          subnetType: SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'private',
+          subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
+    });
+
+    const lambdaSecurityGroup = new SecurityGroup(this, 'LambdaSecurityGroup', {
+      vpc,
+      allowAllOutbound: true,
+    });
+
+    const rdsSecurityGroup = new SecurityGroup(this, 'RdsSecurityGroup', {
+      vpc,
+      allowAllOutbound: true,
+    });
+
+    rdsSecurityGroup.addIngressRule(lambdaSecurityGroup, Port.POSTGRES, "Allow inbound Postgres traffic from Lambda.");
+
+    const postgresUsername = "postgres"
+
+    // TODO: CMK
+    const postgresSecret = new Secret(this, 'PostgresCredentials', {
+      secretName: 'ZkmsPgCredentials',
+      description: "ZKMS Postgres Credentials",
+      generateSecretString: {
+        excludeCharacters: "\"@/\\ '",
+        generateStringKey: 'password',
+        passwordLength: 30,
+        secretStringTemplate: JSON.stringify({username: postgresUsername}),
+      },
+    });
+
+    postgresSecret.grantRead(lambdaExecRole);
+
+    const postgresCredentials = Credentials.fromSecret(
+      postgresSecret,
+      postgresUsername,
+    );
+
+    // TODO: CMK
+
+    // RDS Instance
+    const dbInstance = new DatabaseInstance(this, 'Database', {
+      allocatedStorage: 20,
+      engine: DatabaseInstanceEngine.postgres({
+        version: PostgresEngineVersion.VER_16_3,
+      }),
+      instanceType: InstanceType.of(InstanceClass.T3, InstanceSize.MICRO),
+      vpc,
+      vpcSubnets: {
+        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      credentials: postgresCredentials,
+      securityGroups: [rdsSecurityGroup],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      deletionProtection: false, // Set to true to prevent accidental deletion
+      databaseName: 'zkms',
+    });
+
+    // Lambda functions
+    const lambdaEnvironment = {
+      "ZKMS__IDP__AUDIENCE": props.tokenAudience,
+      "ZKMS__IDP__ISSUERS": props.tokenIssuer,
+      "ZKMS__KEY_PROVIDER__ROOT_KEY_ID": rootKey.keyId,
+      "ZKMS__TRACING_ENABLED": "false",
+      "ZKMS__POSTGRES__CREDS_SECRET_ARN": postgresSecret.secretArn,
+      "ZKMS__POSTGRES__HOST": dbInstance.dbInstanceEndpointAddress,
+      "ZKMS__POSTGRES__NAME": "zkms",
+      "ZKMS__POSTGRES__PORT": dbInstance.dbInstanceEndpointPort,
+      "ZKMS__POSTGRES__SSL_MODE": "verify-full",
+    };
+
+    const zkmsServerFunction = new Function(this, 'ZkmsServerFunction', {
+      runtime: Runtime.PROVIDED_AL2023,
+      architecture: Architecture.ARM_64,
+      handler: 'bootstrap',
+      code: Code.fromBucket(lambdaZipsBucket,  `zkms-zips/zkms-server/${Fn.select(0, serverZip.objectKeys)}`),
+      memorySize: 3008,
+      timeout: cdk.Duration.seconds(5),
+      environment: lambdaEnvironment,
+      role: lambdaExecRole,
+      vpc,
+      securityGroups: [lambdaSecurityGroup],
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
+    const zkmsMigrationsFunction = new Function(this, 'ZkmsMigrationsFunction', {
+      runtime: Runtime.PROVIDED_AL2023,
+      architecture: Architecture.ARM_64,
+      handler: 'bootstrap',
+      code: Code.fromBucket(lambdaZipsBucket,  `zkms-zips/zkms-migrations/${Fn.select(0, migrationsZip.objectKeys)}`),
+      memorySize: 128,
+      timeout: cdk.Duration.seconds(30),
+      environment: lambdaEnvironment,
+      role: lambdaExecRole,
+      vpc,
+      securityGroups: [lambdaSecurityGroup],
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
+    // CloudWatch Log Groups
+    new LogGroup(this, 'ServerFunctionLogGroup', {
+      logGroupName: `/aws/lambda/${zkmsServerFunction.functionName}`,
+      retention: RetentionDays.ONE_DAY,
+    });
+
+    new LogGroup(this, 'MigrationsFunctionLogGroup', {
+      logGroupName: `/aws/lambda/${zkmsMigrationsFunction.functionName}`,
+      retention: RetentionDays.ONE_DAY,
+    });
+
+    // API Gateway
+    const httpApi = new HttpApi(this, 'ZkmsHttpApi');
+
+    httpApi.addRoutes({
+      path: '/{proxy+}',
+      methods: [HttpMethod.ANY],
+      integration: new HttpLambdaIntegration('ZkmsLambdaIntegration', zkmsServerFunction),
+    });
+
+    new CfnOutput(this, 'ZkmsApiUrl', {
+      description: 'The URL of the ZKMS API',
+      value: httpApi.url ?? "N/A",
+    });
+
+    new CfnOutput(this, 'ZkmsMigrationFunctionName', {
+      description: 'The name of the Lambda function for running DB migrations',
+      value: zkmsMigrationsFunction.functionName,
+    });
   }
 }
 
-function getEnvVar(name: string): string {
+export function getEnvVar(name: string): string {
   const value = process.env[name];
 
   if (!value) {
