@@ -11,26 +11,27 @@ import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Credentials, DatabaseInstance, DatabaseInstanceEngine, PostgresEngineVersion } from 'aws-cdk-lib/aws-rds';
 import { CfnOutput } from 'aws-cdk-lib/core';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
-import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 
 interface CipherstashCtsAwsCdkStackProps extends StackProps {
-  kmsKeyManagerArns?: string[],
+  kmsKeyManagerArns: string[],
 }
 
 export class CipherstashCtsAwsCdkStack extends Stack {
-  constructor(scope: App, id: string, props?: CipherstashCtsAwsCdkStackProps) {
+  constructor(scope: App, id: string, props: CipherstashCtsAwsCdkStackProps) {
     super(scope, id, props);
 
-    const kmsKeyManagers = props?.kmsKeyManagerArns ?
-      [new AccountRootPrincipal(), ...props.kmsKeyManagerArns.map(arn => new ArnPrincipal(arn))] :
-      [new AccountRootPrincipal()]
+    const kmsKeyManagers = [
+      new AccountRootPrincipal(),
+      ...props.kmsKeyManagerArns.map(arn => new ArnPrincipal(arn))
+    ];
 
     // For demo purposes, this should be the API Gateway execute endpoint URL (without a trailing Slash).
     // In production, this would be the same custom domain name used by API GW.
     //
     // TODO: use custom domain to remove circular dependency between Lambda and API GW?
+    // TODO: move env vars to top level?
     const auth0TokenAudience = getEnvVar("AUTH0_TOKEN_AUDIENCE");
 
     const auth0TokenIssuer = getEnvVar("AUTH0_TOKEN_ISSUER");
@@ -255,6 +256,44 @@ export class CipherstashCtsAwsCdkStack extends Stack {
   }
 }
 
+interface CipherstashZkmsAwsCdkStackProps extends StackProps {
+}
+
+export class CipherstashZkmsAwsCdkStack extends Stack {
+  constructor(scope: App, id: string, props: CipherstashZkmsAwsCdkStackProps) {
+    super(scope, id, props);
+
+    // IAM Role for Lambda
+    const lambdaExecRole = new Role(this, 'LambdaExecutionRole', {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+    });
+
+    lambdaExecRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'));
+    lambdaExecRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'));
+
+    // S3 Bucket for Lambda zips
+    const lambdaZipsBucket = new Bucket(this, 'LambdaZipsBucket', {
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      encryption: BucketEncryption.S3_MANAGED,
+    });
+
+    // Deploy local files to S3 bucket
+    const serverZip = new BucketDeployment(this, 'DeployServerLambdaZips', {
+      sources: [Source.asset('zkms-server/bootstrap.zip')],
+      destinationBucket: lambdaZipsBucket,
+      destinationKeyPrefix: 'zkms-zips/zkms-server',
+      extract: false,
+    });
+
+    const migrationsZip = new BucketDeployment(this, 'DeployMigrationsLambdaZips', {
+      sources: [Source.asset('zkms-migrations/bootstrap.zip')],
+      destinationBucket: lambdaZipsBucket,
+      destinationKeyPrefix: 'zkms-zips/zkms-migrations',
+      extract: false,
+    });
+  }
+}
+
 function getEnvVar(name: string): string {
   const value = process.env[name];
 
@@ -264,19 +303,3 @@ function getEnvVar(name: string): string {
 
   return value;
 }
-
-(async () => {
-  const client = new STSClient();
-  const command = new GetCallerIdentityCommand({});
-  const identityResponse = await client.send(command);
-
-  const kmsKeyManagerArns = identityResponse.Arn ? [identityResponse.Arn] : []
-
-  const app = new App();
-
-  new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', {
-    kmsKeyManagerArns,
-  });
-
-  app.synth();
-})();

@@ -1,21 +1,25 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { CipherstashCtsAwsCdkStack } from '../lib/cipherstash-cts-aws-cdk-stack';
+import {App} from 'aws-cdk-lib';
+import { CipherstashCtsAwsCdkStack, CipherstashZkmsAwsCdkStack } from '../lib/cipherstash-cts-aws-cdk-stack';
+import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
-const app = new cdk.App();
-new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', {
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and context lookups will not work,
-   * but a single synthesized template can be deployed anywhere. */
+(async () => {
+  const client = new STSClient();
+  const command = new GetCallerIdentityCommand({});
+  const identityResponse = await client.send(command);
 
-  /* Uncomment the next line to specialize this stack for the AWS Account
-   * and Region that are implied by the current CLI configuration. */
-  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+  if (!identityResponse.Arn) {
+    throw new Error("Invalid identity response: missing caller ARN.")
+  }
 
-  /* Uncomment the next line if you know exactly what Account and Region you
-   * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
+  const app = new App();
 
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
-});
+  new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', {
+    kmsKeyManagerArns: [identityResponse.Arn],
+  });
+
+  new CipherstashZkmsAwsCdkStack(app, 'CipherstashZkmsAwsCdkStack', {});
+
+  app.synth();
+})();
