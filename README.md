@@ -14,22 +14,14 @@ The project uses zip files to package the Lambda functions. The zip files are av
 
 Replace `TOKEN` with the CloudSmith token provided to you by your CipherStash technical contact.
 
-TODO: also need to make dirs first. Maybe git keep a zips dir and download there.
+```
+mkdir zips
+cd zips
 
-```
-curl -1sLf -o cts-migrations/bootstrap.zip 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts-migrations/versions/latest/cts-migrations.zip'
-```
-
-```
-curl -1sLf -o cts-server/bootstrap.zip 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts/versions/latest/cts.zip' -v
-```
-
-```
-curl -1sLf -o zkms-migrations/bootstrap.zip 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zkms-migrations/versions/latest/zkms-migrations.zip'
-```
-
-```
-curl -1sLf -o zkms-server/bootstrap.zip 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zkms/versions/latest/zkms.zip' -v
+curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts-migrations/versions/latest/cts-migrations.zip'
+curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts/versions/latest/cts.zip'
+curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zkms-migrations/versions/latest/zkms-migrations.zip'
+curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zkms/versions/latest/zkms.zip'
 ```
 
 ## Getting Started

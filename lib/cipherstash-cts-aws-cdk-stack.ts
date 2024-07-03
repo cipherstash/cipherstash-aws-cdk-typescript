@@ -50,14 +50,14 @@ export class CipherstashCtsAwsCdkStack extends Stack {
 
     // Deploy local files to S3 bucket
     const serverZip = new BucketDeployment(this, 'DeployServerLambdaZips', {
-      sources: [Source.asset('cts-server/bootstrap.zip')],
+      sources: [Source.asset('zips/cts.zip')],
       destinationBucket: lambdaZipsBucket,
       destinationKeyPrefix: 'cts-zips/cts-server',
       extract: false,
     });
 
     const migrationsZip = new BucketDeployment(this, 'DeployMigrationsLambdaZips', {
-      sources: [Source.asset('cts-migrations/bootstrap.zip')],
+      sources: [Source.asset('zips/cts-migrations.zip')],
       destinationBucket: lambdaZipsBucket,
       destinationKeyPrefix: 'cts-zips/cts-migrations',
       extract: false,
@@ -316,14 +316,14 @@ export class CipherstashZkmsAwsCdkStack extends Stack {
 
     // Deploy local files to S3 bucket
     const serverZip = new BucketDeployment(this, 'DeployServerLambdaZips', {
-      sources: [Source.asset('zkms-server/bootstrap.zip')],
+      sources: [Source.asset('zips/zkms.zip')],
       destinationBucket: lambdaZipsBucket,
       destinationKeyPrefix: 'zkms-zips/zkms-server',
       extract: false,
     });
 
     const migrationsZip = new BucketDeployment(this, 'DeployMigrationsLambdaZips', {
-      sources: [Source.asset('zkms-migrations/bootstrap.zip')],
+      sources: [Source.asset('zips/zkms-migrations.zip')],
       destinationBucket: lambdaZipsBucket,
       destinationKeyPrefix: 'zkms-zips/zkms-migrations',
       extract: false,
