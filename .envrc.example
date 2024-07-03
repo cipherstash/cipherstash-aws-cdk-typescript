@@ -1,4 +1,14 @@
-export CTS_TOKEN_AUDIENCE=
+# AWS account ID for CTS
+export CTS_ACCOUNT_ID=
+
+# Your Auth0 URL (with a trailing slash)
 export CTS_TOKEN_ISSUER=
-export ZKMS_TOKEN_AUDIENCE=
-export ZKMS_TOKEN_ISSUER=
+
+# Name of an existing Route53 hosted zone to use for ACM and API GW
+export CTS_ROUTE53_ZONE_NAME=
+
+# AWS account ID for ZeroKMS
+export ZEROKMS_ACCOUNT_ID=
+
+# Name of an existing Route53 hosted zone to use for ACM and API GW
+export ZEROKMS_ROUTE53_ZONE_NAME=

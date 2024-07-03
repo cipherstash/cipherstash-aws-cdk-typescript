@@ -17,21 +17,23 @@ import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
   const app = new App();
 
-  new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', {
+  const ctsStack = new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', {
+    env: {
+      account: getEnvVar("CTS_ACCOUNT_ID"),
+      region: getEnvVar("AWS_REGION"),
+    },
     kmsKeyManagerArns,
-    // For demo purposes, this should be the API Gateway execute endpoint URL (without a trailing Slash).
-    // In production, this would be the same custom domain name used by API GW.
-    //
-    // TODO: use custom domain to remove circular dependency between Lambda and API GW?
-    // TODO: move env vars to top level?
-    tokenAudience: getEnvVar("CTS_TOKEN_AUDIENCE"),
     tokenIssuer: getEnvVar("CTS_TOKEN_ISSUER"),
+    zoneName: getEnvVar("CTS_ROUTE53_ZONE_NAME"),
   });
 
   new CipherstashZkmsAwsCdkStack(app, 'CipherstashZkmsAwsCdkStack', {
+    env: {
+      account: getEnvVar("ZEROKMS_ACCOUNT_ID"),
+      region: getEnvVar("AWS_REGION"),
+    },
     kmsKeyManagerArns,
-    tokenAudience: getEnvVar("ZKMS_TOKEN_AUDIENCE"),
-    tokenIssuer: getEnvVar("ZKMS_TOKEN_ISSUER"),
+    zoneName: getEnvVar("ZEROKMS_ROUTE53_ZONE_NAME"),
   });
 
   app.synth();

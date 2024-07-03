@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as targets from 'aws-cdk-lib/aws-route53-targets'
 import { App, Fn, Stack, type StackProps } from 'aws-cdk-lib';
 import { AccountRootPrincipal, Role, ServicePrincipal, ManagedPolicy, PolicyStatement, PolicyDocument, Effect, ArnPrincipal } from 'aws-cdk-lib/aws-iam';
 import { Bucket, BlockPublicAccess, BucketEncryption } from 'aws-cdk-lib/aws-s3';
@@ -6,18 +7,20 @@ import { Vpc, SubnetType, SecurityGroup, InstanceType, InstanceClass, InstanceSi
 import { Key, KeySpec, KeyUsage } from 'aws-cdk-lib/aws-kms';
 // biome-ignore lint/suspicious/noShadowRestrictedNames: This is a false positive
 import { Function, Runtime, Code, Architecture } from 'aws-cdk-lib/aws-lambda';
-import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { DomainName, HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Credentials, DatabaseInstance, DatabaseInstanceEngine, PostgresEngineVersion } from 'aws-cdk-lib/aws-rds';
 import { CfnOutput } from 'aws-cdk-lib/core';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import { ARecord, HostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
+import { Certificate, CertificateValidation } from 'aws-cdk-lib/aws-certificatemanager';
 
 interface CipherstashCtsAwsCdkStackProps extends StackProps {
   kmsKeyManagerArns: string[],
-  tokenAudience: string,
   tokenIssuer: string,
+  zoneName: string,
 }
 
 export class CipherstashCtsAwsCdkStack extends Stack {
@@ -28,6 +31,8 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       new AccountRootPrincipal(),
       ...props.kmsKeyManagerArns.map(arn => new ArnPrincipal(arn))
     ];
+
+    const domainName = `cts.${props.zoneName}`;
 
     // IAM Role for Lambda
     const lambdaExecRole = new Role(this, 'LambdaExecutionRole', {
@@ -132,7 +137,7 @@ export class CipherstashCtsAwsCdkStack extends Stack {
 
     rdsSecurityGroup.addIngressRule(lambdaSecurityGroup, Port.POSTGRES, "Allow inbound Postgres traffic from Lambda.");
 
-    const postgresUsername = "postgres"
+    const postgresUsername = "postgres";
 
     // TODO: CMK
     const postgresSecret = new Secret(this, 'PostgresCredentials', {
@@ -175,7 +180,7 @@ export class CipherstashCtsAwsCdkStack extends Stack {
 
     // Lambda functions
     const lambdaEnvironment = {
-      'CTS__AUTH0__TOKEN_AUDIENCES': props.tokenAudience,
+      'CTS__AUTH0__TOKEN_AUDIENCES': `https://${domainName}/`,
       'CTS__AUTH0__TOKEN_ISSUER': props.tokenIssuer,
       'CTS__DATABASE__CREDS_SECRET_ARN': postgresSecret.secretArn,
       'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
@@ -227,8 +232,27 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       retention: RetentionDays.ONE_DAY,
     });
 
+    const zone = HostedZone.fromLookup(this, 'Zone', {
+      domainName: props.zoneName,
+     });
+
+     const certificate = new Certificate(this, 'Certificate', {
+       domainName,
+       validation: CertificateValidation.fromDns(zone),
+     });
+
+     const dn = new DomainName(this, 'DomainName', {
+       domainName,
+       certificate,
+     });
+
     // API Gateway
-    const httpApi = new HttpApi(this, 'CtsHttpApi');
+    const httpApi = new HttpApi(this, 'CtsHttpApi', {
+      defaultDomainMapping: {
+        domainName: dn,
+      },
+      disableExecuteApiEndpoint: true,
+    });
 
     httpApi.addRoutes({
       path: '/{proxy+}',
@@ -236,10 +260,21 @@ export class CipherstashCtsAwsCdkStack extends Stack {
       integration: new HttpLambdaIntegration('CtsLambdaIntegration', ctsServerFunction),
     });
 
+    new ARecord(this, 'AliasRecord', {
+      zone,
+      recordName: 'cts',
+      target: RecordTarget.fromAlias(
+        new targets.ApiGatewayv2DomainProperties(
+          dn.regionalDomainName,
+          dn.regionalHostedZoneId
+        )
+      ),
+    });
+
     // Output for CTS API URL
     new CfnOutput(this, 'CtsApiUrl', {
       description: 'The URL of the CTS API',
-      value: httpApi.url ?? "N/A",
+      value: `https://${domainName}`
     });
 
     new CfnOutput(this, 'CtsMigrationFunctionName', {
@@ -251,8 +286,7 @@ export class CipherstashCtsAwsCdkStack extends Stack {
 
 interface CipherstashZkmsAwsCdkStackProps extends StackProps {
   kmsKeyManagerArns: string[],
-  tokenAudience: string,
-  tokenIssuer: string,
+  zoneName: string,
 }
 
 export class CipherstashZkmsAwsCdkStack extends Stack {
@@ -263,6 +297,8 @@ export class CipherstashZkmsAwsCdkStack extends Stack {
       new AccountRootPrincipal(),
       ...props.kmsKeyManagerArns.map(arn => new ArnPrincipal(arn))
     ];
+
+    const domainName = `zerokms.${props.zoneName}`;
 
     // IAM Role for Lambda
     const lambdaExecRole = new Role(this, 'LambdaExecutionRole', {
@@ -365,7 +401,7 @@ export class CipherstashZkmsAwsCdkStack extends Stack {
 
     rdsSecurityGroup.addIngressRule(lambdaSecurityGroup, Port.POSTGRES, "Allow inbound Postgres traffic from Lambda.");
 
-    const postgresUsername = "postgres"
+    const postgresUsername = "postgres";
 
     // TODO: CMK
     const postgresSecret = new Secret(this, 'PostgresCredentials', {
@@ -408,8 +444,8 @@ export class CipherstashZkmsAwsCdkStack extends Stack {
 
     // Lambda functions
     const lambdaEnvironment = {
-      "ZKMS__IDP__AUDIENCE": props.tokenAudience,
-      "ZKMS__IDP__ISSUERS": props.tokenIssuer,
+      "ZKMS__IDP__AUDIENCE": `https://${domainName}/`,
+      "ZKMS__IDP__ISSUERS": `https://cts.${props.zoneName}/`,
       "ZKMS__KEY_PROVIDER__ROOT_KEY_ID": rootKey.keyId,
       "ZKMS__TRACING_ENABLED": "false",
       "ZKMS__POSTGRES__CREDS_SECRET_ARN": postgresSecret.secretArn,
@@ -458,8 +494,27 @@ export class CipherstashZkmsAwsCdkStack extends Stack {
       retention: RetentionDays.ONE_DAY,
     });
 
+    const zone = HostedZone.fromLookup(this, 'Zone', {
+     domainName: props.zoneName,
+    });
+
+    const certificate = new Certificate(this, 'Certificate', {
+      domainName,
+      validation: CertificateValidation.fromDns(zone),
+    });
+
+    const dn = new DomainName(this, 'DomainName', {
+      domainName,
+      certificate,
+    });
+
     // API Gateway
-    const httpApi = new HttpApi(this, 'ZkmsHttpApi');
+    const httpApi = new HttpApi(this, 'ZkmsHttpApi', {
+      defaultDomainMapping: {
+        domainName: dn,
+      },
+      disableExecuteApiEndpoint: true,
+    });
 
     httpApi.addRoutes({
       path: '/{proxy+}',
@@ -467,9 +522,20 @@ export class CipherstashZkmsAwsCdkStack extends Stack {
       integration: new HttpLambdaIntegration('ZkmsLambdaIntegration', zkmsServerFunction),
     });
 
+    new ARecord(this, 'AliasRecord', {
+      zone,
+      recordName: 'zerokms',
+      target: RecordTarget.fromAlias(
+        new targets.ApiGatewayv2DomainProperties(
+          dn.regionalDomainName,
+          dn.regionalHostedZoneId
+        )
+      ),
+    });
+
     new CfnOutput(this, 'ZkmsApiUrl', {
       description: 'The URL of the ZKMS API',
-      value: httpApi.url ?? "N/A",
+      value: `https://${domainName}`
     });
 
     new CfnOutput(this, 'ZkmsMigrationFunctionName', {
