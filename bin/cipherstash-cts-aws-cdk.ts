@@ -1,12 +1,23 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
-import {App} from 'aws-cdk-lib';
-import { CipherstashCtsAwsCdkStack, CipherstashZkmsAwsCdkStack, getEnvVar } from '../lib/cipherstash-cts-aws-cdk-stack';
-import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
+import * as cdk from 'aws-cdk-lib';
+import * as cipherstashCdk from '../lib/cipherstash-cdk';
+import * as sts from "@aws-sdk/client-sts";
+
+export function getEnvVar(name: string): string {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`Required environment variable ${name} not set.`);
+  }
+
+  return value;
+}
+
 
 (async () => {
-  const client = new STSClient();
-  const command = new GetCallerIdentityCommand({});
+  const client = new sts.STSClient();
+  const command = new sts.GetCallerIdentityCommand({});
   const identityResponse = await client.send(command);
 
   if (!identityResponse.Arn) {
@@ -15,9 +26,9 @@ import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
   const kmsKeyManagerArns = [identityResponse.Arn];
 
-  const app = new App();
+  const app = new cdk.App();
 
-  const ctsStack = new CipherstashCtsAwsCdkStack(app, 'CipherstashCtsAwsCdkStack', {
+  new cipherstashCdk.CipherstashCtsStack(app, 'CipherstashCtsAwsCdkStack', {
     env: {
       account: getEnvVar("CTS_ACCOUNT_ID"),
       region: getEnvVar("AWS_REGION"),
@@ -27,7 +38,7 @@ import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
     zoneName: getEnvVar("CTS_ROUTE53_ZONE_NAME"),
   });
 
-  new CipherstashZkmsAwsCdkStack(app, 'CipherstashZkmsAwsCdkStack', {
+  new cipherstashCdk.CipherstashZeroKmsStack(app, 'CipherstashZkmsAwsCdkStack', {
     env: {
       account: getEnvVar("ZEROKMS_ACCOUNT_ID"),
       region: getEnvVar("AWS_REGION"),
