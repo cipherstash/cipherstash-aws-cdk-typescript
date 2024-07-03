@@ -137,7 +137,6 @@ export class CipherstashCtsStack extends cdk.Stack {
 
     const postgresUsername = "postgres";
 
-    // TODO: CMK
     const postgresSecret = new secretsmanager.Secret(this, 'PostgresCredentials', {
       secretName: 'CtsPgCredentials',
       description: "CTS Postgres Credentials",
@@ -155,8 +154,6 @@ export class CipherstashCtsStack extends cdk.Stack {
       postgresSecret,
       postgresUsername,
     );
-
-    // TODO: CMK
 
     // RDS Instance
     const dbInstance = new rds.DatabaseInstance(this, 'Database', {
@@ -401,7 +398,6 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
 
     const postgresUsername = "postgres";
 
-    // TODO: CMK
     const postgresSecret = new secretsmanager.Secret(this, 'PostgresCredentials', {
       secretName: 'ZkmsPgCredentials',
       description: "ZKMS Postgres Credentials",
@@ -419,8 +415,6 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       postgresSecret,
       postgresUsername,
     );
-
-    // TODO: CMK
 
     // RDS Instance
     const dbInstance = new rds.DatabaseInstance(this, 'Database', {
