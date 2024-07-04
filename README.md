@@ -20,8 +20,8 @@ cd zips
 
 curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts-migrations/versions/latest/cts-migrations.zip'
 curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts/versions/latest/cts.zip'
-curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zkms-migrations/versions/latest/zkms-migrations.zip'
-curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zkms/versions/latest/zkms.zip'
+curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zerokms-migrations/versions/latest/zerokms-migrations.zip'
+curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zerokms/versions/latest/zerokms.zip'
 ```
 
 ## Getting Started

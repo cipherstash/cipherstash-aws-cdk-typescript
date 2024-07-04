@@ -310,22 +310,22 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
 
     // Deploy local files to S3 bucket
     const serverZip = new s3Deployment.BucketDeployment(this, 'DeployServerLambdaZips', {
-      sources: [s3Deployment.Source.asset('zips/zkms.zip')],
+      sources: [s3Deployment.Source.asset('zips/zerokms.zip')],
       destinationBucket: lambdaZipsBucket,
-      destinationKeyPrefix: 'zkms-zips/zkms-server',
+      destinationKeyPrefix: 'zerokms-zips/zerokms-server',
       extract: false,
     });
 
     const migrationsZip = new s3Deployment.BucketDeployment(this, 'DeployMigrationsLambdaZips', {
-      sources: [s3Deployment.Source.asset('zips/zkms-migrations.zip')],
+      sources: [s3Deployment.Source.asset('zips/zerokms-migrations.zip')],
       destinationBucket: lambdaZipsBucket,
-      destinationKeyPrefix: 'zkms-zips/zkms-migrations',
+      destinationKeyPrefix: 'zerokms-zips/zerokms-migrations',
       extract: false,
     });
 
     const rootKey = new kms.Key(this, 'RootKey', {
       description: 'ZKMS root key',
-      alias: "zkms-root-key",
+      alias: "zerokms-root-key",
       policy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
@@ -430,7 +430,7 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       securityGroups: [rdsSecurityGroup],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       deletionProtection: false, // Set to true to prevent accidental deletion
-      databaseName: 'zkms',
+      databaseName: 'zerokms',
     });
 
     // Lambda functions
@@ -441,16 +441,16 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       "ZEROKMS__TRACING_ENABLED": "false",
       "ZEROKMS__POSTGRES__CREDS_SECRET_ARN": postgresSecret.secretArn,
       "ZEROKMS__POSTGRES__HOST": dbInstance.dbInstanceEndpointAddress,
-      "ZEROKMS__POSTGRES__NAME": "zkms",
+      "ZEROKMS__POSTGRES__NAME": "zerokms",
       "ZEROKMS__POSTGRES__PORT": dbInstance.dbInstanceEndpointPort,
       "ZEROKMS__POSTGRES__SSL_MODE": "verify-full",
     };
 
-    const zkmsServerFunction = new lambda.Function(this, 'ZkmsServerFunction', {
+    const zeroKmsServerFunction = new lambda.Function(this, 'ZkmsServerFunction', {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `zkms-zips/zkms-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket,  `zerokms-zips/zerokms-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
       memorySize: 3008,
       timeout: cdk.Duration.seconds(5),
       environment: lambdaEnvironment,
@@ -460,11 +460,11 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
     });
 
-    const zkmsMigrationsFunction = new lambda.Function(this, 'ZkmsMigrationsFunction', {
+    const zeroKmsMigrationsFunction = new lambda.Function(this, 'ZkmsMigrationsFunction', {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `zkms-zips/zkms-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket,  `zerokms-zips/zerokms-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
       memorySize: 128,
       timeout: cdk.Duration.seconds(30),
       environment: lambdaEnvironment,
@@ -476,12 +476,12 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
 
     // CloudWatch Log Groups
     new logs.LogGroup(this, 'ServerFunctionLogGroup', {
-      logGroupName: `/aws/lambda/${zkmsServerFunction.functionName}`,
+      logGroupName: `/aws/lambda/${zeroKmsServerFunction.functionName}`,
       retention: logs.RetentionDays.ONE_DAY,
     });
 
     new logs.LogGroup(this, 'MigrationsFunctionLogGroup', {
-      logGroupName: `/aws/lambda/${zkmsMigrationsFunction.functionName}`,
+      logGroupName: `/aws/lambda/${zeroKmsMigrationsFunction.functionName}`,
       retention: logs.RetentionDays.ONE_DAY,
     });
 
@@ -510,7 +510,7 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
     httpApi.addRoutes({
       path: '/{proxy+}',
       methods: [apigatewayv2.HttpMethod.ANY],
-      integration: new apigatewayv2Integrations.HttpLambdaIntegration('ZkmsLambdaIntegration', zkmsServerFunction),
+      integration: new apigatewayv2Integrations.HttpLambdaIntegration('ZkmsLambdaIntegration', zeroKmsServerFunction),
     });
 
     new route53.ARecord(this, 'AliasRecord', {
@@ -531,7 +531,7 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
 
     new core.CfnOutput(this, 'ZkmsMigrationFunctionName', {
       description: 'The name of the Lambda function for running DB migrations',
-      value: zkmsMigrationsFunction.functionName,
+      value: zeroKmsMigrationsFunction.functionName,
     });
   }
 }
