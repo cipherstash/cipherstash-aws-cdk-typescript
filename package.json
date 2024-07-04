@@ -1,8 +1,8 @@
 {
-  "name": "cipherstash-cts-aws-cdk",
+  "name": "cipherstash-aws-cdk",
   "version": "0.1.0",
   "bin": {
-    "cipherstash-cts-aws-cdk": "bin/cipherstash-cts-aws-cdk.js"
+    "cipherstash-aws-cdk": "bin/cipherstash-aws-cdk.js"
   },
   "scripts": {
     "build": "tsc",
@@ -20,6 +20,7 @@
     "typescript": "~5.4.5"
   },
   "dependencies": {
+    "@aws-sdk/client-sts": "3.606.0",
     "aws-cdk-lib": "2.147.1",
     "constructs": "^10.0.0",
     "source-map-support": "^0.5.21"
