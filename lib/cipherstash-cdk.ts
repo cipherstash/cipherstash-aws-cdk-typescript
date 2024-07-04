@@ -137,7 +137,7 @@ export class CipherstashCtsStack extends cdk.Stack {
     const postgresUsername = "postgres";
 
     const postgresSecret = new secretsmanager.Secret(this, 'PostgresCredentials', {
-      secretName: 'CtsPgCredentials',
+      secretName: 'CtsPostgresCredentials',
       description: "CTS Postgres Credentials",
       generateSecretString: {
         excludeCharacters: "\"@/\\ '",
@@ -187,7 +187,7 @@ export class CipherstashCtsStack extends cdk.Stack {
       'CTS__LOGGING_ENDPOINTS': '',
     };
 
-    const ctsServerFunction = new lambda.Function(this, 'CtsServerFunction', {
+    const ctsServerFunction = new lambda.Function(this, 'ServerFunction', {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
@@ -201,7 +201,7 @@ export class CipherstashCtsStack extends cdk.Stack {
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
     });
 
-    const ctsMigrationsFunction = new lambda.Function(this, 'CtsMigrationsFunction', {
+    const ctsMigrationsFunction = new lambda.Function(this, 'MigrationsFunction', {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
@@ -241,7 +241,7 @@ export class CipherstashCtsStack extends cdk.Stack {
      });
 
     // API Gateway
-    const httpApi = new apigatewayv2.HttpApi(this, 'CtsHttpApi', {
+    const httpApi = new apigatewayv2.HttpApi(this, 'HttpApi', {
       defaultDomainMapping: {
         domainName,
       },
@@ -251,7 +251,7 @@ export class CipherstashCtsStack extends cdk.Stack {
     httpApi.addRoutes({
       path: '/{proxy+}',
       methods: [apigatewayv2.HttpMethod.ANY],
-      integration: new apigatewayv2Integrations.HttpLambdaIntegration('CtsLambdaIntegration', ctsServerFunction),
+      integration: new apigatewayv2Integrations.HttpLambdaIntegration('LambdaIntegration', ctsServerFunction),
     });
 
     new route53.ARecord(this, 'AliasRecord', {
@@ -265,14 +265,13 @@ export class CipherstashCtsStack extends cdk.Stack {
       ),
     });
 
-    // Output for CTS API URL
-    new core.CfnOutput(this, 'CtsApiUrl', {
+    new core.CfnOutput(this, 'ApiUrl', {
       description: 'The URL of the CTS API',
       value: `https://${props.domainName}/`
     });
 
-    new core.CfnOutput(this, 'CtsMigrationFunctionName', {
-      description: 'The name of the Lambda function for running DB migrations',
+    new core.CfnOutput(this, 'MigrationFunctionName', {
+      description: 'The name of the Lambda function for running CTS DB migrations',
       value: ctsMigrationsFunction.functionName,
     });
   }
@@ -324,7 +323,7 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
     });
 
     const rootKey = new kms.Key(this, 'RootKey', {
-      description: 'ZKMS root key',
+      description: 'ZeroKMS root key',
       alias: "zerokms-root-key",
       policy: new iam.PolicyDocument({
         statements: [
@@ -398,8 +397,8 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
     const postgresUsername = "postgres";
 
     const postgresSecret = new secretsmanager.Secret(this, 'PostgresCredentials', {
-      secretName: 'ZkmsPgCredentials',
-      description: "ZKMS Postgres Credentials",
+      secretName: 'ZeroKmsPostgresCredentials',
+      description: "ZeroKMS Postgres Credentials",
       generateSecretString: {
         excludeCharacters: "\"@/\\ '",
         generateStringKey: 'password',
@@ -446,7 +445,7 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       "ZEROKMS__POSTGRES__SSL_MODE": "verify-full",
     };
 
-    const zeroKmsServerFunction = new lambda.Function(this, 'ZkmsServerFunction', {
+    const zeroKmsServerFunction = new lambda.Function(this, 'ServerFunction', {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
@@ -460,7 +459,7 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
     });
 
-    const zeroKmsMigrationsFunction = new lambda.Function(this, 'ZkmsMigrationsFunction', {
+    const zeroKmsMigrationsFunction = new lambda.Function(this, 'MigrationsFunction', {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
@@ -500,7 +499,7 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
     });
 
     // API Gateway
-    const httpApi = new apigatewayv2.HttpApi(this, 'ZkmsHttpApi', {
+    const httpApi = new apigatewayv2.HttpApi(this, 'HttpApi', {
       defaultDomainMapping: {
         domainName,
       },
@@ -510,7 +509,7 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
     httpApi.addRoutes({
       path: '/{proxy+}',
       methods: [apigatewayv2.HttpMethod.ANY],
-      integration: new apigatewayv2Integrations.HttpLambdaIntegration('ZkmsLambdaIntegration', zeroKmsServerFunction),
+      integration: new apigatewayv2Integrations.HttpLambdaIntegration('LambdaIntegration', zeroKmsServerFunction),
     });
 
     new route53.ARecord(this, 'AliasRecord', {
@@ -524,13 +523,13 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       ),
     });
 
-    new core.CfnOutput(this, 'ZkmsApiUrl', {
-      description: 'The URL of the ZKMS API',
+    new core.CfnOutput(this, 'ApiUrl', {
+      description: 'The URL of the ZeroKMS API',
       value: `https://${props.domainName}/`
     });
 
-    new core.CfnOutput(this, 'ZkmsMigrationFunctionName', {
-      description: 'The name of the Lambda function for running DB migrations',
+    new core.CfnOutput(this, 'MigrationFunctionName', {
+      description: 'The name of the Lambda function for running ZeroKMS DB migrations',
       value: zeroKmsMigrationsFunction.functionName,
     });
   }
