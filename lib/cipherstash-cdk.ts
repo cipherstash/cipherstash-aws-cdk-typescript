@@ -435,15 +435,15 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
 
     // Lambda functions
     const lambdaEnvironment = {
-      "ZKMS__IDP__AUDIENCE": `https://${props.domainName}/`,
-      "ZKMS__IDP__ISSUERS": props.tokenIssuer,
-      "ZKMS__KEY_PROVIDER__ROOT_KEY_ID": rootKey.keyId,
-      "ZKMS__TRACING_ENABLED": "false",
-      "ZKMS__POSTGRES__CREDS_SECRET_ARN": postgresSecret.secretArn,
-      "ZKMS__POSTGRES__HOST": dbInstance.dbInstanceEndpointAddress,
-      "ZKMS__POSTGRES__NAME": "zkms",
-      "ZKMS__POSTGRES__PORT": dbInstance.dbInstanceEndpointPort,
-      "ZKMS__POSTGRES__SSL_MODE": "verify-full",
+      "ZEROKMS__IDP__AUDIENCE": `https://${props.domainName}/`,
+      "ZEROKMS__IDP__ISSUERS": props.tokenIssuer,
+      "ZEROKMS__KEY_PROVIDER__ROOT_KEY_ID": rootKey.keyId,
+      "ZEROKMS__TRACING_ENABLED": "false",
+      "ZEROKMS__POSTGRES__CREDS_SECRET_ARN": postgresSecret.secretArn,
+      "ZEROKMS__POSTGRES__HOST": dbInstance.dbInstanceEndpointAddress,
+      "ZEROKMS__POSTGRES__NAME": "zkms",
+      "ZEROKMS__POSTGRES__PORT": dbInstance.dbInstanceEndpointPort,
+      "ZEROKMS__POSTGRES__SSL_MODE": "verify-full",
     };
 
     const zkmsServerFunction = new lambda.Function(this, 'ZkmsServerFunction', {
