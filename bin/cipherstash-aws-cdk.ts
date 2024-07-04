@@ -39,7 +39,7 @@ export function getEnvVar(name: string): string {
 
   const app = new cdk.App();
 
-  new cipherstashCdk.CipherstashCtsStack(app, 'CipherstashCtsAwsCdkStack', {
+  new cipherstashCdk.CipherstashCtsStack(app, 'CipherstashCtsStack', {
     env: {
       account: getEnvVar("CTS_ACCOUNT_ID"),
       region: getEnvVar("AWS_REGION"),
@@ -50,7 +50,7 @@ export function getEnvVar(name: string): string {
     domainName: ctsDomainName,
   });
 
-  new cipherstashCdk.CipherstashZeroKmsStack(app, 'CipherstashZkmsAwsCdkStack', {
+  new cipherstashCdk.CipherstashZeroKmsStack(app, 'CipherstashZeroKmsStack', {
     env: {
       account: getEnvVar("ZEROKMS_ACCOUNT_ID"),
       region: getEnvVar("AWS_REGION"),
