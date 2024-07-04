@@ -24,6 +24,17 @@ export function getEnvVar(name: string): string {
     throw new Error("Invalid identity response: missing caller ARN.")
   }
 
+  const ctsZoneName = getEnvVar("CTS_ROUTE53_ZONE_NAME");
+  const zeroKmsZoneName = getEnvVar("ZEROKMS_ROUTE53_ZONE_NAME");
+
+  // If using a single Route53 zone, assume that we want to prepend the subdomain.
+  // Otherwise, assume that we want to use the same name as the zone.
+  // In prod, you'll want to use separate zones (in separate accounts), but using
+  // a single zone and account can be useful in pre-prod environments.
+  const [ctsDomainName, zeroKmsDomainName] = ctsZoneName === zeroKmsZoneName ?
+    [`cts.${ctsZoneName}`, `zerokms.${zeroKmsZoneName}`] :
+    [ctsZoneName, zeroKmsZoneName]
+
   const kmsKeyManagerArns = [identityResponse.Arn];
 
   const app = new cdk.App();
@@ -35,7 +46,8 @@ export function getEnvVar(name: string): string {
     },
     kmsKeyManagerArns,
     tokenIssuer: getEnvVar("CTS_TOKEN_ISSUER"),
-    zoneName: getEnvVar("CTS_ROUTE53_ZONE_NAME"),
+    zoneName: ctsZoneName,
+    domainName: ctsDomainName,
   });
 
   new cipherstashCdk.CipherstashZeroKmsStack(app, 'CipherstashZkmsAwsCdkStack', {
@@ -44,7 +56,9 @@ export function getEnvVar(name: string): string {
       region: getEnvVar("AWS_REGION"),
     },
     kmsKeyManagerArns,
-    zoneName: getEnvVar("ZEROKMS_ROUTE53_ZONE_NAME"),
+    tokenIssuer: `https://${ctsDomainName}/`,
+    zoneName: zeroKmsZoneName,
+    domainName: zeroKmsDomainName,
   });
 
   app.synth();

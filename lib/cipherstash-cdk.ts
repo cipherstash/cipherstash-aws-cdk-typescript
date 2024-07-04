@@ -19,6 +19,7 @@ interface CipherstashCtsStackProps extends cdk.StackProps {
   kmsKeyManagerArns: string[],
   tokenIssuer: string,
   zoneName: string,
+  domainName: string,
 }
 
 export class CipherstashCtsStack extends cdk.Stack {
@@ -29,8 +30,6 @@ export class CipherstashCtsStack extends cdk.Stack {
       new iam.AccountRootPrincipal(),
       ...props.kmsKeyManagerArns.map(arn => new iam.ArnPrincipal(arn))
     ];
-
-    const domainName = `cts.${props.zoneName}`;
 
     // IAM Role for Lambda
     const lambdaExecRole = new iam.Role(this, 'LambdaExecutionRole', {
@@ -175,7 +174,7 @@ export class CipherstashCtsStack extends cdk.Stack {
 
     // Lambda functions
     const lambdaEnvironment = {
-      'CTS__AUTH0__TOKEN_AUDIENCES': `https://${domainName}/`,
+      'CTS__AUTH0__TOKEN_AUDIENCES': `https://${props.domainName}/`,
       'CTS__AUTH0__TOKEN_ISSUER': props.tokenIssuer,
       'CTS__DATABASE__CREDS_SECRET_ARN': postgresSecret.secretArn,
       'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
@@ -232,19 +231,19 @@ export class CipherstashCtsStack extends cdk.Stack {
      });
 
      const certificate = new certificatemanager.Certificate(this, 'Certificate', {
-       domainName,
+       domainName: props.domainName,
        validation: certificatemanager.CertificateValidation.fromDns(zone),
      });
 
-     const dn = new apigatewayv2.DomainName(this, 'DomainName', {
-       domainName,
+     const domainName = new apigatewayv2.DomainName(this, 'DomainName', {
+       domainName: props.domainName,
        certificate,
      });
 
     // API Gateway
     const httpApi = new apigatewayv2.HttpApi(this, 'CtsHttpApi', {
       defaultDomainMapping: {
-        domainName: dn,
+        domainName,
       },
       disableExecuteApiEndpoint: true,
     });
@@ -260,8 +259,8 @@ export class CipherstashCtsStack extends cdk.Stack {
       recordName: 'cts',
       target: route53.RecordTarget.fromAlias(
         new targets.ApiGatewayv2DomainProperties(
-          dn.regionalDomainName,
-          dn.regionalHostedZoneId
+          domainName.regionalDomainName,
+          domainName.regionalHostedZoneId
         )
       ),
     });
@@ -269,7 +268,7 @@ export class CipherstashCtsStack extends cdk.Stack {
     // Output for CTS API URL
     new core.CfnOutput(this, 'CtsApiUrl', {
       description: 'The URL of the CTS API',
-      value: `https://${domainName}`
+      value: `https://${props.domainName}/`
     });
 
     new core.CfnOutput(this, 'CtsMigrationFunctionName', {
@@ -281,7 +280,9 @@ export class CipherstashCtsStack extends cdk.Stack {
 
 interface CipherstashZeroKmsStackProps extends cdk.StackProps {
   kmsKeyManagerArns: string[],
+  tokenIssuer: string,
   zoneName: string,
+  domainName: string,
 }
 
 export class CipherstashZeroKmsStack extends cdk.Stack {
@@ -292,8 +293,6 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       new iam.AccountRootPrincipal(),
       ...props.kmsKeyManagerArns.map(arn => new iam.ArnPrincipal(arn))
     ];
-
-    const domainName = `zerokms.${props.zoneName}`;
 
     // IAM Role for Lambda
     const lambdaExecRole = new iam.Role(this, 'LambdaExecutionRole', {
@@ -436,8 +435,8 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
 
     // Lambda functions
     const lambdaEnvironment = {
-      "ZKMS__IDP__AUDIENCE": `https://${domainName}/`,
-      "ZKMS__IDP__ISSUERS": `https://cts.${props.zoneName}/`,
+      "ZKMS__IDP__AUDIENCE": `https://${props.domainName}/`,
+      "ZKMS__IDP__ISSUERS": props.tokenIssuer,
       "ZKMS__KEY_PROVIDER__ROOT_KEY_ID": rootKey.keyId,
       "ZKMS__TRACING_ENABLED": "false",
       "ZKMS__POSTGRES__CREDS_SECRET_ARN": postgresSecret.secretArn,
@@ -491,19 +490,19 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
     });
 
     const certificate = new certificatemanager.Certificate(this, 'Certificate', {
-      domainName,
+      domainName: props.domainName,
       validation: certificatemanager.CertificateValidation.fromDns(zone),
     });
 
-    const dn = new apigatewayv2.DomainName(this, 'DomainName', {
-      domainName,
+    const domainName = new apigatewayv2.DomainName(this, 'DomainName', {
+      domainName: props.domainName,
       certificate,
     });
 
     // API Gateway
     const httpApi = new apigatewayv2.HttpApi(this, 'ZkmsHttpApi', {
       defaultDomainMapping: {
-        domainName: dn,
+        domainName,
       },
       disableExecuteApiEndpoint: true,
     });
@@ -519,15 +518,15 @@ export class CipherstashZeroKmsStack extends cdk.Stack {
       recordName: 'zerokms',
       target: route53.RecordTarget.fromAlias(
         new targets.ApiGatewayv2DomainProperties(
-          dn.regionalDomainName,
-          dn.regionalHostedZoneId
+          domainName.regionalDomainName,
+          domainName.regionalHostedZoneId
         )
       ),
     });
 
     new core.CfnOutput(this, 'ZkmsApiUrl', {
       description: 'The URL of the ZKMS API',
-      value: `https://${domainName}`
+      value: `https://${props.domainName}/`
     });
 
     new core.CfnOutput(this, 'ZkmsMigrationFunctionName', {
