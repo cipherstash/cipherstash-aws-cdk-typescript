@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import * as cipherStashCdk from '../lib/cipherstash-cdk';
+import { CipherStashCtsStack, CipherStashZeroKmsStack } from '../lib/cipherstash-cdk';
 import * as sts from "@aws-sdk/client-sts";
 
 export function getEnvVar(name: string): string {
@@ -39,7 +39,7 @@ export function getEnvVar(name: string): string {
 
   const app = new cdk.App();
 
-  new cipherStashCdk.CipherStashCtsStack(app, 'CipherStashCtsStack', {
+  new CipherStashCtsStack(app, 'CipherStashCtsStack', {
     env: {
       account: getEnvVar("CTS_ACCOUNT_ID"),
       region: getEnvVar("AWS_REGION"),
@@ -50,7 +50,7 @@ export function getEnvVar(name: string): string {
     domainName: ctsDomainName,
   });
 
-  new cipherStashCdk.CipherStashZeroKmsStack(app, 'CipherStashZeroKmsStack', {
+  new CipherStashZeroKmsStack(app, 'CipherStashZeroKmsStack', {
     env: {
       account: getEnvVar("ZEROKMS_ACCOUNT_ID"),
       region: getEnvVar("AWS_REGION"),
