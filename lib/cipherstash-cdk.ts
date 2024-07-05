@@ -256,7 +256,7 @@ export class CipherStashCtsStack extends cdk.Stack {
 
     new route53.ARecord(this, 'AliasRecord', {
       zone,
-      recordName: 'cts',
+      recordName: `${props.domainName}.`,
       target: route53.RecordTarget.fromAlias(
         new targets.ApiGatewayv2DomainProperties(
           domainName.regionalDomainName,
@@ -514,7 +514,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
 
     new route53.ARecord(this, 'AliasRecord', {
       zone,
-      recordName: 'zerokms',
+      recordName: `${props.domainName}.`,
       target: route53.RecordTarget.fromAlias(
         new targets.ApiGatewayv2DomainProperties(
           domainName.regionalDomainName,
