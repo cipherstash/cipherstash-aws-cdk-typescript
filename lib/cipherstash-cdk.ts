@@ -15,15 +15,15 @@ import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrat
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 
-interface CipherstashCtsStackProps extends cdk.StackProps {
+interface CipherStashCtsStackProps extends cdk.StackProps {
   kmsKeyManagerArns: string[],
   tokenIssuer: string,
   zoneName: string,
   domainName: string,
 }
 
-export class CipherstashCtsStack extends cdk.Stack {
-  constructor(scope: cdk.App, id: string, props: CipherstashCtsStackProps) {
+export class CipherStashCtsStack extends cdk.Stack {
+  constructor(scope: cdk.App, id: string, props: CipherStashCtsStackProps) {
     super(scope, id, props);
 
     const kmsKeyManagers = [
@@ -277,15 +277,15 @@ export class CipherstashCtsStack extends cdk.Stack {
   }
 }
 
-interface CipherstashZeroKmsStackProps extends cdk.StackProps {
+interface CipherStashZeroKmsStackProps extends cdk.StackProps {
   kmsKeyManagerArns: string[],
   tokenIssuer: string,
   zoneName: string,
   domainName: string,
 }
 
-export class CipherstashZeroKmsStack extends cdk.Stack {
-  constructor(scope: cdk.App, id: string, props: CipherstashZeroKmsStackProps) {
+export class CipherStashZeroKmsStack extends cdk.Stack {
+  constructor(scope: cdk.App, id: string, props: CipherStashZeroKmsStackProps) {
     super(scope, id, props);
 
     const kmsKeyManagers = [
