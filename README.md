@@ -62,7 +62,7 @@ wget -O zips/zerokms.zip \
   "https://dl.cloudsmith.io/${CLOUDSMITH_TOKEN}/cipherstash/lambdas/raw/names/zerokms/versions/${LAMBDA_VERSION}/zerokms.zip"
 ```
 
-3. Install the dependencies
+4. Install the dependencies
 
 Node.js
 
@@ -76,7 +76,7 @@ Bun
 bun install
 ```
 
-4. Deploy the stack
+5. Deploy the stack
 
 Node.js
 
