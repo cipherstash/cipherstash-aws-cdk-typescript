@@ -1,3 +1,9 @@
+# Your Cloudsmith token supplied by CipherStash
+export CLOUDSMITH_TOKEN=
+
+# The version of Lambda zips to download
+export LAMBDA_VERSION=
+
 # AWS account ID for CTS
 export CTS_ACCOUNT_ID=
 

@@ -4,7 +4,7 @@ import * as cdk from 'aws-cdk-lib';
 import { CipherStashCtsStack, CipherStashZeroKmsStack } from '../lib/cipherstash-cdk';
 import * as sts from "@aws-sdk/client-sts";
 
-export function getEnvVar(name: string): string {
+function getEnvVar(name: string): string {
   const value = process.env[name];
 
   if (!value) {
