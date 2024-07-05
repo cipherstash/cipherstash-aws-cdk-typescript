@@ -1,23 +1,54 @@
-# CipherStash Token Service AWS CDK - TypeScript
+# CipherStash AWS CDK - TypeScript
 
-This project is a TypeScript implementation of the CipherStash Token Service using the AWS Cloud Development Kit (CDK).
+This project is an example TypeScript implementation of customer-hosted CipherStash Token Service (CTS) and ZeroKMS using the AWS Cloud Development Kit (CDK).
+
+> [!IMPORTANT]
+> This README only provides high-level documentation.
+> You can find detailed documentation on customer-hosted CipherStash at https://cipherstash.com/docs/how-to/customer-hosting.
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/en/download/) or [Bun](https://bun.sh/)
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
-- [AWS CDK](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html)
+- An Auth0 application and API
+- Two AWS accounts to deploy into (one for CTS and one for ZeroKMS) with existing Route52 zones for AWS API Gateway and ACM
+- A Cloudsmith token provided to you by your CipherStash technical contact
 
-### Zip files
+## Getting Started
 
-The project uses zip files to package the Lambda functions. The zip files are available for download from the CloudSmith endpoint provided to you by your CipherStash technical contact.
+1. Clone the repository
 
+```bash
+git clone
+```
+
+2. Prepare your env
 ```
 # Your Cloudsmith token supplied by CipherStash
 export CLOUDSMITH_TOKEN=
 
 export LAMBDA_VERSION="latest"
 
+# AWS account ID for CTS
+export CTS_ACCOUNT_ID=
+
+# Your Auth0 URL (with a trailing slash)
+export CTS_TOKEN_ISSUER=
+
+# Name of an existing Route53 hosted zone to use for ACM and API GW
+export CTS_ROUTE53_ZONE_NAME=
+
+# AWS account ID for ZeroKMS
+export ZEROKMS_ACCOUNT_ID=
+
+# Name of an existing Route53 hosted zone to use for ACM and API GW
+export ZEROKMS_ROUTE53_ZONE_NAME=
+```
+
+3. Download Lambda zips
+
+This project uses zip files to package AWS Lambda functions. The zip files are available for download using the Cloudsmith token provided to you by your CipherStash technical contact.
+
+```
 wget -O zips/cts-migrations.zip \
   "https://dl.cloudsmith.io/${CLOUDSMITH_TOKEN}/cipherstash/lambdas/raw/names/cts-migrations/versions/${LAMBDA_VERSION}/cts-migrations.zip"
 
@@ -31,15 +62,7 @@ wget -O zips/zerokms.zip \
   "https://dl.cloudsmith.io/${CLOUDSMITH_TOKEN}/cipherstash/lambdas/raw/names/zerokms/versions/${LAMBDA_VERSION}/zerokms.zip"
 ```
 
-## Getting Started
-
-1. Clone the repository
-
-```bash
-git clone
-```
-
-2. Install the dependencies
+3. Install the dependencies
 
 Node.js
 
@@ -53,47 +76,26 @@ Bun
 bun install
 ```
 
-3. Build the project
-
-Node.js
-
-```bash
-npm run build
-```
-
-Bun
-
-```bash
-bun run build
-```
-
 4. Deploy the stack
 
 Node.js
 
 ```bash
-npm run cdk deploy
+npm run cdk deploy CipherStashCtsStack
+npm run cdk deploy CipherStashZeroKmsStack
 ```
 
 Bun
 
 ```bash
-bun cdk deploy
-```
-
-5. Test the stack
-
-Node.js
-
-```bash
-npm run test
+bun cdk deploy CipherStashCtsStack
+bun cdk deploy CipherStashZeroKmsStack
 ```
 
 ## Useful commands
 
 - `bun run build` compile typescript to js
 - `bun run watch` watch for changes and compile
-- `bun run test` perform the jest unit tests
 - `bun cdk deploy` deploy this stack to your default AWS account/region
 - `bun cdk diff` compare deployed stack with current state
 - `bun cdk synth` emits the synthesized CloudFormation template
