@@ -12,16 +12,23 @@ This project is a TypeScript implementation of the CipherStash Token Service usi
 
 The project uses zip files to package the Lambda functions. The zip files are available for download from the CloudSmith endpoint provided to you by your CipherStash technical contact.
 
-Replace `TOKEN` with the CloudSmith token provided to you by your CipherStash technical contact.
-
 ```
-mkdir zips
-cd zips
+# Your Cloudsmith token supplied by CipherStash
+export CLOUDSMITH_TOKEN=
 
-curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts-migrations/versions/latest/cts-migrations.zip'
-curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/cts/versions/latest/cts.zip'
-curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zerokms-migrations/versions/latest/zerokms-migrations.zip'
-curl -1sLf -O 'https://dl.cloudsmith.io/TOKEN/cipherstash/lambdas/raw/names/zerokms/versions/latest/zerokms.zip'
+export LAMBDA_VERSION="latest"
+
+wget -O zips/cts-migrations.zip \
+  "https://dl.cloudsmith.io/${CLOUDSMITH_TOKEN}/cipherstash/lambdas/raw/names/cts-migrations/versions/${LAMBDA_VERSION}/cts-migrations.zip"
+
+wget -O zips/cts.zip \
+  "https://dl.cloudsmith.io/${CLOUDSMITH_TOKEN}/cipherstash/lambdas/raw/names/cts/versions/${LAMBDA_VERSION}/cts.zip"
+
+wget -O zips/zerokms-migrations.zip \
+  "https://dl.cloudsmith.io/${CLOUDSMITH_TOKEN}/cipherstash/lambdas/raw/names/zerokms-migrations/versions/${LAMBDA_VERSION}/zerokms-migrations.zip"
+
+wget -O zips/zerokms.zip \
+  "https://dl.cloudsmith.io/${CLOUDSMITH_TOKEN}/cipherstash/lambdas/raw/names/zerokms/versions/${LAMBDA_VERSION}/zerokms.zip"
 ```
 
 ## Getting Started
