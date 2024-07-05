@@ -6,13 +6,13 @@ node_modules
 # CDK asset staging directory
 .cdk.staging
 cdk.out
-cdk.out.tmp
 
 cdk.context.json
 
-bootstrap.zip
 .DS_Store
 
+# Envs files
 .envrc
 
-zips
+# Lambda artifacts
+zips/*.zip
