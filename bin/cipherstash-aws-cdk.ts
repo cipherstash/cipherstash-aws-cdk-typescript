@@ -17,7 +17,13 @@ function getEnvVar(name: string): string {
 
 (async () => {
   const client = new sts.STSClient();
-  const command = new sts.GetCallerIdentityCommand({});
+
+  // Use the AWS_PROFILE environment variable to specify the profile to use.
+  // This is noted in the README, but it's worth mentioning here as well.
+  const command = new sts.GetCallerIdentityCommand({
+    profile: getEnvVar("AWS_PROFILE"),
+  });
+
   const identityResponse = await client.send(command);
 
   if (!identityResponse.Arn) {

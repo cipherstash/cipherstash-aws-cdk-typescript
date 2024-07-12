@@ -1,0 +1,19 @@
+# Copy this file to cli-workspace/.envrc and replace the values with your own
+
+# Auth0 CipherStash CLI application Client ID
+export CS_IDP_CLIENT_ID=""
+
+# Auth0 IDP Host URL
+export CS_IDP_HOST="https://<Auth0 CipherStash CLI application Domain>/"
+
+# Output of CipherStashCtsStack.ApiUrl
+export CS_IDP_AUDIENCE="<CipherStashCtsStack.ApiUrl>"
+
+# Output of CipherStashCtsStack.ApiUrl
+export CS_MANAGEMENT_HOST="<CipherStashCtsStack.ApiUrl>"
+
+# Output of CipherStashCtsStack.ApiUrl
+export CS_CTS_HOST="<CipherStashCtsStack.ApiUrl>"
+
+# Output of CipherStashZeroKmsStack.ApiUrl
+export CS_ZEROKMS_HOST="<CipherStashZeroKmsStack.ApiUrl>"

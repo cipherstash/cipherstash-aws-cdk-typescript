@@ -2,12 +2,13 @@
 export CLOUDSMITH_TOKEN=
 
 # The version of Lambda zips to download
-export LAMBDA_VERSION=
+export LAMBDA_VERSION=latest
 
 # AWS account ID for CTS
 export CTS_ACCOUNT_ID=
 
 # Your Auth0 URL (with a trailing slash)
+# Example: https://demo-cipherstash.au.auth0.com/
 export CTS_TOKEN_ISSUER=
 
 # Name of an existing Route53 hosted zone to use for ACM and API GW
@@ -18,3 +19,10 @@ export ZEROKMS_ACCOUNT_ID=
 
 # Name of an existing Route53 hosted zone to use for ACM and API GW
 export ZEROKMS_ROUTE53_ZONE_NAME=
+
+# Name of the AWS region for deployment of the resources
+# Example: us-west-2
+export AWS_REGION=
+
+# Name of the AWS profile which is configured the the AWS CLI
+export AWS_PROFILE=
