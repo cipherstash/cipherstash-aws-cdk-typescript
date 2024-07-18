@@ -7,7 +7,11 @@ export LAMBDA_VERSION=latest
 # AWS account ID for CTS
 export CTS_ACCOUNT_ID=
 
-# Your Auth0 URL (with a trailing slash)
+# The IDP provider that will generate user tokens.
+# Either auth0 or okta.
+export CTS_TOKEN_PROVIDER=auth0
+
+# Your IDP URL (with a trailing slash)
 # Example: https://demo-cipherstash.au.auth0.com/
 export CTS_TOKEN_ISSUER=
 

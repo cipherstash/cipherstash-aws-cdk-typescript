@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { CipherStashCtsStack, CipherStashZeroKmsStack } from '../lib/cipherstash-cdk';
+import { CipherStashCtsStack, CipherStashZeroKmsStack, TokenProvider } from '../lib/cipherstash-cdk';
 import * as sts from "@aws-sdk/client-sts";
 
 function getEnvVar(name: string): string {
@@ -12,6 +12,14 @@ function getEnvVar(name: string): string {
   }
 
   return value;
+}
+
+function asIdpProvider(value: string): TokenProvider {
+	if (value !== "auth0" && value !== "okta") {
+		throw new Error(`Invalid IDP provider specified - got '${value}'`);
+	}
+
+	return value;
 }
 
 
@@ -52,6 +60,7 @@ function getEnvVar(name: string): string {
     },
     kmsKeyManagerArns,
     tokenIssuer: getEnvVar("CTS_TOKEN_ISSUER"),
+    tokenProvider: asIdpProvider(getEnvVar("CTS_TOKEN_PROVIDER")),
     zoneName: ctsZoneName,
     domainName: ctsDomainName,
   });

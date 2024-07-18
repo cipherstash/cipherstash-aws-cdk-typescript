@@ -15,11 +15,14 @@ import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrat
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 
+export type TokenProvider = "auth0" | "okta";
+
 interface CipherStashCtsStackProps extends cdk.StackProps {
   kmsKeyManagerArns: string[],
   tokenIssuer: string,
   zoneName: string,
   domainName: string,
+	tokenProvider: TokenProvider
 }
 
 export class CipherStashCtsStack extends cdk.Stack {
@@ -172,10 +175,12 @@ export class CipherStashCtsStack extends cdk.Stack {
       databaseName: 'cts',
     });
 
+    const idpName = props.tokenProvider.toUpperCase();
+
     // Lambda functions
     const lambdaEnvironment = {
-      'CTS__AUTH0__TOKEN_AUDIENCES': `https://${props.domainName}/`,
-      'CTS__AUTH0__TOKEN_ISSUER': props.tokenIssuer,
+      [`CTS__${idpName}__TOKEN_AUDIENCES`]: `https://${props.domainName}/`,
+      [`CTS__${idpName}__TOKEN_ISSUER`]: props.tokenIssuer,
       'CTS__DATABASE__CREDS_SECRET_ARN': postgresSecret.secretArn,
       'CTS__DATABASE__HOST': dbInstance.dbInstanceEndpointAddress,
       'CTS__DATABASE__NAME': 'cts',
