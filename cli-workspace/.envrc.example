@@ -1,4 +1,7 @@
 # Copy this file to cli-workspace/.envrc and replace the values with your own
+#
+# Auth0 CipherStash CLI application Client ID
+export CS_IDP_PROVIDER="auth0"
 
 # Auth0 CipherStash CLI application Client ID
 export CS_IDP_CLIENT_ID=""
