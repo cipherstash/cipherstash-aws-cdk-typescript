@@ -22,7 +22,7 @@ interface CipherStashCtsStackProps extends cdk.StackProps {
   tokenIssuer: string,
   zoneName: string,
   domainName: string,
-	tokenProvider: TokenProvider
+  tokenProvider: TokenProvider
 }
 
 export class CipherStashCtsStack extends cdk.Stack {
@@ -146,7 +146,7 @@ export class CipherStashCtsStack extends cdk.Stack {
         excludeCharacters: "\"@/\\ '",
         generateStringKey: 'password',
         passwordLength: 30,
-        secretStringTemplate: JSON.stringify({username: postgresUsername}),
+        secretStringTemplate: JSON.stringify({ username: postgresUsername }),
       },
     });
 
@@ -196,7 +196,7 @@ export class CipherStashCtsStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `cts-zips/cts-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket, `cts-zips/cts-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
       memorySize: 3008,
       timeout: cdk.Duration.seconds(5),
       environment: lambdaEnvironment,
@@ -210,7 +210,7 @@ export class CipherStashCtsStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `cts-zips/cts-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket, `cts-zips/cts-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
       memorySize: 128,
       timeout: cdk.Duration.seconds(30),
       environment: lambdaEnvironment,
@@ -233,17 +233,17 @@ export class CipherStashCtsStack extends cdk.Stack {
 
     const zone = route53.HostedZone.fromLookup(this, 'Zone', {
       domainName: props.zoneName,
-     });
+    });
 
-     const certificate = new certificatemanager.Certificate(this, 'Certificate', {
-       domainName: props.domainName,
-       validation: certificatemanager.CertificateValidation.fromDns(zone),
-     });
+    const certificate = new certificatemanager.Certificate(this, 'Certificate', {
+      domainName: props.domainName,
+      validation: certificatemanager.CertificateValidation.fromDns(zone),
+    });
 
-     const domainName = new apigatewayv2.DomainName(this, 'DomainName', {
-       domainName: props.domainName,
-       certificate,
-     });
+    const domainName = new apigatewayv2.DomainName(this, 'DomainName', {
+      domainName: props.domainName,
+      certificate,
+    });
 
     // API Gateway
     const httpApi = new apigatewayv2.HttpApi(this, 'HttpApi', {
@@ -287,6 +287,7 @@ interface CipherStashZeroKmsStackProps extends cdk.StackProps {
   tokenIssuer: string,
   zoneName: string,
   domainName: string,
+  multiRegionKey: boolean,
 }
 
 export class CipherStashZeroKmsStack extends cdk.Stack {
@@ -327,47 +328,17 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
       extract: false,
     });
 
-    const rootKey = new kms.Key(this, 'RootKey', {
-      description: 'ZeroKMS root key',
-      alias: "zerokms-root-key",
-      policy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            sid: "Key Managers",
-            effect: iam.Effect.ALLOW,
-            principals: kmsKeyManagers,
-            actions: [
-              "kms:Create*",
-              "kms:Describe*",
-              "kms:Enable*",
-              "kms:List*",
-              "kms:Put*",
-              "kms:Update*",
-              "kms:Revoke*",
-              "kms:Disable*",
-              "kms:Get*",
-              "kms:Delete*",
-              "kms:TagResource",
-              "kms:UntagResource",
-              "kms:ScheduleKeyDeletion",
-              "kms:CancelKeyDeletion",
-              "kms:RotateKeyOnDemand",
-            ],
-            resources: ["*"],
-          }),
-          new iam.PolicyStatement({
-            sid: "Allow ZeroKMS to work with the key",
-            effect: iam.Effect.ALLOW,
-            principals: [lambdaExecRole],
-            actions: [
-              "kms:GenerateDataKey",
-              "kms:Decrypt",
-              "kms:Encrypt",
-            ],
-            resources: ["*"],
-          })
-        ]
-      })
+    const rootKeyPolicy = getRootKeyPolicy(kmsKeyManagers, lambdaExecRole);
+
+    const rootKey = new kms.CfnKey(this, 'RootKey', {
+      description: "ZeroKMS root key",
+      multiRegion: !!props.multiRegionKey,
+      keyPolicy: rootKeyPolicy,
+    });
+
+    const rootKeyAlias = new kms.CfnAlias(this, 'RootKeyAlias', {
+      aliasName: 'zerokms-root-key',
+      targetKeyId: rootKey.ref,
     });
 
     // VPC and Subnets
@@ -408,7 +379,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
         excludeCharacters: "\"@/\\ '",
         generateStringKey: 'password',
         passwordLength: 30,
-        secretStringTemplate: JSON.stringify({username: postgresUsername}),
+        secretStringTemplate: JSON.stringify({ username: postgresUsername }),
       },
     });
 
@@ -441,7 +412,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
     const lambdaEnvironment = {
       "ZEROKMS__IDP__AUDIENCE": `https://${props.domainName}/`,
       "ZEROKMS__IDP__ISSUERS": props.tokenIssuer,
-      "ZEROKMS__KEY_PROVIDER__ROOT_KEY_ID": rootKey.keyId,
+      "ZEROKMS__KEY_PROVIDER__ROOT_KEY_ID": rootKey.ref,
       "ZEROKMS__TRACING_ENABLED": "false",
       "ZEROKMS__POSTGRES__CREDS_SECRET_ARN": postgresSecret.secretArn,
       "ZEROKMS__POSTGRES__HOST": dbInstance.dbInstanceEndpointAddress,
@@ -454,7 +425,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `zerokms-zips/zerokms-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket, `zerokms-zips/zerokms-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
       memorySize: 3008,
       timeout: cdk.Duration.seconds(5),
       environment: lambdaEnvironment,
@@ -468,7 +439,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `zerokms-zips/zerokms-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket, `zerokms-zips/zerokms-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
       memorySize: 128,
       timeout: cdk.Duration.seconds(30),
       environment: lambdaEnvironment,
@@ -490,7 +461,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
     });
 
     const zone = route53.HostedZone.fromLookup(this, 'Zone', {
-     domainName: props.zoneName,
+      domainName: props.zoneName,
     });
 
     const certificate = new certificatemanager.Certificate(this, 'Certificate', {
@@ -537,5 +508,88 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
       description: 'The name of the Lambda function for running ZeroKMS DB migrations',
       value: zeroKmsMigrationsFunction.functionName,
     });
+
+    if (props.multiRegionKey) {
+      new core.CfnOutput(this, 'RootKeyArn', {
+        description: 'The arn of the *AWS-KMS* root key',
+        value: rootKey.attrArn,
+      });
+    }
+
   }
+}
+
+interface CipherStashZeroKmsReplicaStackProps extends cdk.StackProps {
+  kmsKeyManagerArns: string[],
+  primaryKeyArn: string,
+}
+
+export class CipherStashZeroKmsReplicaStack extends cdk.Stack {
+  constructor(scope: cdk.App, id: string, props: CipherStashZeroKmsReplicaStackProps) {
+    super(scope, id, props);
+
+    const kmsKeyManagers = [
+      new iam.AccountRootPrincipal(),
+      ...props.kmsKeyManagerArns.map(arn => new iam.ArnPrincipal(arn))
+    ];
+
+    // IAM Role for Lambda
+    const lambdaExecRole = new iam.Role(this, 'LambdaExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    });
+
+    const rootKeyPolicy = getRootKeyPolicy(kmsKeyManagers, lambdaExecRole);
+
+    const replicaKey = new kms.CfnReplicaKey(this, 'ReplicaKey', {
+      description: "ZeroKMS root key replica",
+      primaryKeyArn: props.primaryKeyArn,
+      keyPolicy: rootKeyPolicy,
+    });
+
+  }
+
+}
+
+
+function getRootKeyPolicy(kmsKeyManagers: cdk.aws_iam.ArnPrincipal[], lambdaExecRole: cdk.aws_iam.Role) {
+
+  const rootKeyPolicy = new iam.PolicyDocument({
+    statements: [
+      new iam.PolicyStatement({
+        sid: "Key Managers",
+        effect: iam.Effect.ALLOW,
+        principals: kmsKeyManagers,
+        actions: [
+          "kms:Create*",
+          "kms:Describe*",
+          "kms:Enable*",
+          "kms:List*",
+          "kms:Put*",
+          "kms:Update*",
+          "kms:Revoke*",
+          "kms:Disable*",
+          "kms:Get*",
+          "kms:Delete*",
+          "kms:TagResource",
+          "kms:UntagResource",
+          "kms:ScheduleKeyDeletion",
+          "kms:CancelKeyDeletion",
+          "kms:RotateKeyOnDemand",
+        ],
+        resources: ["*"],
+      }),
+      new iam.PolicyStatement({
+        sid: "Allow ZeroKMS to work with the key",
+        effect: iam.Effect.ALLOW,
+        principals: [lambdaExecRole],
+        actions: [
+          "kms:GenerateDataKey",
+          "kms:Decrypt",
+          "kms:Encrypt",
+        ],
+        resources: ["*"],
+      })
+    ]
+  });
+
 }
