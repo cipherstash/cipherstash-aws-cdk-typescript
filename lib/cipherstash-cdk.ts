@@ -22,7 +22,7 @@ interface CipherStashCtsStackProps extends cdk.StackProps {
   tokenIssuer: string,
   zoneName: string,
   domainName: string,
-	tokenProvider: TokenProvider
+  tokenProvider: TokenProvider
 }
 
 export class CipherStashCtsStack extends cdk.Stack {
@@ -146,7 +146,7 @@ export class CipherStashCtsStack extends cdk.Stack {
         excludeCharacters: "\"@/\\ '",
         generateStringKey: 'password',
         passwordLength: 30,
-        secretStringTemplate: JSON.stringify({username: postgresUsername}),
+        secretStringTemplate: JSON.stringify({ username: postgresUsername }),
       },
     });
 
@@ -196,7 +196,7 @@ export class CipherStashCtsStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `cts-zips/cts-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket, `cts-zips/cts-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
       memorySize: 3008,
       timeout: cdk.Duration.seconds(5),
       environment: lambdaEnvironment,
@@ -210,7 +210,7 @@ export class CipherStashCtsStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `cts-zips/cts-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket, `cts-zips/cts-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
       memorySize: 128,
       timeout: cdk.Duration.seconds(30),
       environment: lambdaEnvironment,
@@ -233,17 +233,17 @@ export class CipherStashCtsStack extends cdk.Stack {
 
     const zone = route53.HostedZone.fromLookup(this, 'Zone', {
       domainName: props.zoneName,
-     });
+    });
 
-     const certificate = new certificatemanager.Certificate(this, 'Certificate', {
-       domainName: props.domainName,
-       validation: certificatemanager.CertificateValidation.fromDns(zone),
-     });
+    const certificate = new certificatemanager.Certificate(this, 'Certificate', {
+      domainName: props.domainName,
+      validation: certificatemanager.CertificateValidation.fromDns(zone),
+    });
 
-     const domainName = new apigatewayv2.DomainName(this, 'DomainName', {
-       domainName: props.domainName,
-       certificate,
-     });
+    const domainName = new apigatewayv2.DomainName(this, 'DomainName', {
+      domainName: props.domainName,
+      certificate,
+    });
 
     // API Gateway
     const httpApi = new apigatewayv2.HttpApi(this, 'HttpApi', {
@@ -379,7 +379,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
         excludeCharacters: "\"@/\\ '",
         generateStringKey: 'password',
         passwordLength: 30,
-        secretStringTemplate: JSON.stringify({username: postgresUsername}),
+        secretStringTemplate: JSON.stringify({ username: postgresUsername }),
       },
     });
 
@@ -425,7 +425,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `zerokms-zips/zerokms-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket, `zerokms-zips/zerokms-server/${cdk.Fn.select(0, serverZip.objectKeys)}`),
       memorySize: 3008,
       timeout: cdk.Duration.seconds(5),
       environment: lambdaEnvironment,
@@ -439,7 +439,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromBucket(lambdaZipsBucket,  `zerokms-zips/zerokms-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
+      code: lambda.Code.fromBucket(lambdaZipsBucket, `zerokms-zips/zerokms-migrations/${cdk.Fn.select(0, migrationsZip.objectKeys)}`),
       memorySize: 128,
       timeout: cdk.Duration.seconds(30),
       environment: lambdaEnvironment,
@@ -461,7 +461,7 @@ export class CipherStashZeroKmsStack extends cdk.Stack {
     });
 
     const zone = route53.HostedZone.fromLookup(this, 'Zone', {
-     domainName: props.zoneName,
+      domainName: props.zoneName,
     });
 
     const certificate = new certificatemanager.Certificate(this, 'Certificate', {
@@ -543,7 +543,7 @@ export class CipherStashZeroKmsReplicaStack extends cdk.Stack {
     const replicaKey = new kms.CfnReplicaKey(this, 'ReplicaKey', {
       description: "ZeroKMS root key replica",
       primaryKeyArn: props.primaryKeyArn,
-      keyPolicy: keyPolicy,
+      keyPolicy: rootKeyPolicy,
     });
 
   }
